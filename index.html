@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kelime Ezber</title>
+  <style>
+    * { 
+      box-sizing: border-box; 
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+    }
+    body { 
+      background: #0f172a; 
+      color: #f8fafc; 
+      display: flex; 
+      justify-content: center; 
+      align-items: center; 
+      min-height: 100vh; 
+      margin: 0; 
+      padding: 15px; 
+    }
+    .card { 
+      background: #1e293b; 
+      padding: 25px; 
+      border-radius: 16px; 
+      width: 100%; 
+      max-width: 480px; 
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5); 
+    }
+    h2 { 
+      margin-top: 0; 
+      text-align: center; 
+      color: #38bdf8; 
+    }
+    .word-box { 
+      font-size: 1.6rem; 
+      font-weight: bold; 
+      text-align: center; 
+      margin: 25px 0 15px; 
+      min-height: 40px; 
+      color: #e2e8f0; 
+    }
+    input[type="text"] { 
+      width: 100%; 
+      padding: 12px; 
+      border-radius: 8px; 
+      border: 1px solid #475569; 
+      background: #0f172a; 
+      color: #fff; 
+      font-size: 1.1rem; 
+      outline: none; 
+    }
+    input[type="text"]:focus { 
+      border-color: #38bdf8; 
+    }
+    button { 
+      width: 100%; 
+      padding: 12px; 
+      margin-top: 10px; 
+      border-radius: 8px; 
+      border: none; 
+      font-weight: bold; 
+      font-size: 1rem; 
+      cursor: pointer; 
+      background: #38bdf8; 
+      color: #0f172a; 
+    }
+    button:hover { 
+      background: #0ea5e9; 
+    }
+    .feedback { 
+      margin-top: 15px; 
+      text-align: center; 
+      font-weight: bold; 
+      font-size: 1.1rem; 
+      min-height: 28px; 
+    }
+    .correct { 
+      color: #4ade80; 
+    }
+    .wrong { 
+      color: #f87171; 
+    }
+    .stats { 
+      font-size: 0.85rem; 
+      color: #94a3b8; 
+      text-align: center; 
+      margin-top: 20px; 
+      border-top: 1px solid #334155; 
+      padding-top: 15px; 
+    }
+    textarea { 
+      width: 100%; 
+      height: 110px; 
+      background: #0f172a; 
+      border: 1px solid #475569; 
+      border-radius: 8px; 
+      color: #fff; 
+      padding: 10px; 
+      font-size: 0.9rem; 
+      margin-top: 10px; 
+    }
+    details { 
+      margin-top: 15px; 
+      font-size: 0.9rem; 
+      color: #94a3b8; 
+    }
+    summary { 
+      cursor: pointer; 
+      color: #38bdf8; 
+      font-weight: 500; 
+    }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <h2>Kelime Pratiği</h2>
+  
+  <div class="word-box" id="promptWord">Yükleniyor...</div>
+  
+  <form id="quizForm" onsubmit="event.preventDefault(); checkAnswer();">
+    <input type="text" id="answerInput" placeholder="İngilizce karşılığını yaz..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+    <button type="submit">Kontrol Et</button>
+  </form>
+
+  <div class="feedback" id="feedback"></div>
+  <div class="stats" id="stats">Havuz: 0 kelime</div>
+
+  <details>
+    <summary>Kelime Ekle / Listeyi Değiştir</summary>
+    <p style="margin: 6px 0; font-size: 0.8rem;">Her satıra: <b>Türkçe = İngilizce</b> formatında yaz:</p>
+    <textarea id="bulkInput" placeholder="köprü = bridge&#10;ödünç almak = borrow&#10;kalabalık = crowded"></textarea>
+    <button type="button" onclick="saveBulkWords()" style="background: #334155; color: #fff;">Tüm Listeyi Kaydet</button>
+  </details>
+</div>
+
+<script>
+  const defaultWords = [
+    { tr: "köprü", en: "bridge", weight: 3 },
+    { tr: "tehlikeli", en: "dangerous", weight: 3 },
+    { tr: "ödünç almak", en: "borrow", weight: 3 },
+    { tr: "borçlu olmak", en: "owe", weight: 3 },
+    { tr: "hayran olmak", en: "admire", weight: 3 },
+    { tr: "çanta / el çantası", en: "purse", weight: 3 },
+    { tr: "kalabalık", en: "crowded", weight: 3 },
+    { tr: "bizi / bize", en: "us", weight: 3 },
+    { tr: "mobilya", en: "furniture", weight: 3 },
+    { tr: "ödünç vermek", en: "lend", weight: 3 },
+    { tr: "diş macunu", en: "toothpaste", weight: 3 },
+    { tr: "nefret etmek", en: "hate", weight: 3 },
+    { tr: "hücre", en: "cell", weight: 3 },
+    { tr: "geliştirmek", en: "develop", weight: 3 }
+  ];
+
+  let words = JSON.parse(localStorage.getItem("vocab_words")) || defaultWords;
+  let currentWord = null;
+
+  function saveToStorage() {
+    localStorage.setItem("vocab_words", JSON.stringify(words));
+    updateStats();
+  }
+
+  function pickRandomWord() {
+    if (!words || words.length === 0) return;
+    
+    let totalWeight = words.reduce((sum, w) => sum + w.weight, 0);
+    let rand = Math.random() * totalWeight;
+    let selected = words[0];
+
+    for (let w of words) {
+      if (rand < w.weight) {
+        selected = w;
+        break;
+      }
+      rand -= w.weight;
+    }
+
+    if (words.length > 1 && currentWord && selected.tr === currentWord.tr) {
+      return pickRandomWord();
+    }
+
+    currentWord = selected;
+    document.getElementById("promptWord").textContent = currentWord.tr;
+    document.getElementById("answerInput").value = "";
+    document.getElementById("feedback").textContent = "";
+    document.getElementById("answerInput").focus();
+  }
+
+  function checkAnswer() {
+    if (!currentWord) return;
+    const input = document.getElementById("answerInput").value.trim().toLowerCase();
+    const correct = currentWord.en.toLowerCase();
+    const feedback = document.getElementById("feedback");
+
+    if (input === correct) {
+      feedback.textContent = "Doğru!";
+      feedback.className = "feedback correct";
+      currentWord.weight = Math.max(1, currentWord.weight - 1);
+      saveToStorage();
+      setTimeout(pickRandomWord, 700);
+    } else {
+      feedback.textContent = "Yanlış! Doğrusu: " + currentWord.en;
+      feedback.className = "feedback wrong";
+      currentWord.weight += 3;
+      saveToStorage();
+    }
+  }
+
+  function saveBulkWords() {
+    const raw = document.getElementById("bulkInput").value.trim();
+    if (!raw) return;
+
+    const lines = raw.split("\n");
+    const newWords = [];
+
+    lines.forEach(line => {
+      const parts = line.split("=");
+      if (parts.length === 2) {
+        const trPart = parts[0].trim().toLowerCase();
+        const enPart = parts[1].trim().toLowerCase();
+        if (trPart && enPart) {
+          newWords.push({
+            tr: trPart,
+            en: enPart,
+            weight: 3
+          });
+        }
+      }
+    });
+
+    if (newWords.length > 0) {
+      words = newWords;
+      saveToStorage();
+      alert(words.length + " kelime başarıyla yüklendi!");
+      document.getElementById("bulkInput").value = "";
+      pickRandomWord();
+    } else {
+      alert("Format hatalı! Her satıra 'türkçe = ingilizce' yazmalısın.");
+    }
+  }
+
+  function updateStats() {
+    document.getElementById("stats").textContent = "Toplam Kelime: " + words.length;
+  }
+
+  updateStats();
+  pickRandomWord();
+</script>
+
+</body>
+</html>
