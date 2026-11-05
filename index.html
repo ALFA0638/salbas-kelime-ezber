@@ -68,6 +68,22 @@
     button:hover { 
       background: #0ea5e9; 
     }
+    .btn-secondary {
+      background: #334155;
+      color: #fff;
+    }
+    .btn-secondary:hover {
+      background: #475569;
+    }
+    .btn-danger {
+      background: #991b1b;
+      color: #fecaca;
+      font-size: 0.85rem;
+      padding: 8px;
+    }
+    .btn-danger:hover {
+      background: #b91c1c;
+    }
     .feedback { 
       margin-top: 15px; 
       text-align: center; 
@@ -82,7 +98,7 @@
       color: #f87171; 
     }
     .stats { 
-      font-size: 0.85rem; 
+      font-size: 0.9rem; 
       color: #94a3b8; 
       text-align: center; 
       margin-top: 20px; 
@@ -110,6 +126,11 @@
       color: #38bdf8; 
       font-weight: 500; 
     }
+    .info-text {
+      margin: 6px 0; 
+      font-size: 0.8rem;
+      color: #cbd5e1;
+    }
   </style>
 </head>
 <body>
@@ -128,10 +149,13 @@
   <div class="stats" id="stats">Havuz: 0 kelime</div>
 
   <details>
-    <summary>Kelime Ekle / Listeyi Değiştir</summary>
-    <p style="margin: 6px 0; font-size: 0.8rem;">Her satıra: <b>Türkçe = İngilizce</b> formatında yaz:</p>
-    <textarea id="bulkInput" placeholder="köprü = bridge&#10;ödünç almak = borrow&#10;kalabalık = crowded"></textarea>
-    <button type="button" onclick="saveBulkWords()" style="background: #334155; color: #fff;">Tüm Listeyi Kaydet</button>
+    <summary>Kelime Ekle / Havuzu Yönet</summary>
+    <p class="info-text">
+      İster <b>Türkçe = İngilizce</b>, ister <b>İngilizce = Türkçe</b> yaz. Fark etmez, sistem Türkçesini bulup sana soracak. Yeni eklediklerin eskilerin üzerine eklenir, silinmez!
+    </p>
+    <textarea id="bulkInput" placeholder="bridge = köprü&#10;ödünç almak = borrow&#10;crowded = kalabalık"></textarea>
+    <button type="button" class="btn-secondary" onclick="addBulkWords()">Havuza Ekle (Üstüne Ekle)</button>
+    <button type="button" class="btn-danger" onclick="clearAllWords()" style="margin-top: 15px;">Tüm Kelimeleri Sıfırla (Temizle)</button>
   </details>
 </div>
 
@@ -161,8 +185,44 @@
     updateStats();
   }
 
+  // Türkçe / İngilizce ayrımını akıllıca yapan fonksiyon
+  function detectPair(p1, p2) {
+    // Türkçe özel karakterler: ç, ğ, ı, ö, ş, ü
+    const trCharRegex = /[çğışöüÇĞİŞÖÜ]/;
+    
+    // Eğer p1'de Türkçe karakter varsa kesinlikle p1 Türkçedir
+    if (trCharRegex.test(p1) && !trCharRegex.test(p2)) {
+      return { tr: p1, en: p2 };
+    }
+    // Eğer p2'de Türkçe karakter varsa kesinlikle p2 Türkçedir
+    if (trCharRegex.test(p2) && !trCharRegex.test(p1)) {
+      return { tr: p2, en: p1 };
+    }
+
+    // Türkçe mastar ekleri (etmek, olmak, almak, vermek, -mek, -mak)
+    const trVerbRegex = /(etmek|olmak|almak|vermek|yapmak|gitmek|gelmek|mak|mek)$/i;
+    if (trVerbRegex.test(p1) && !trVerbRegex.test(p2)) {
+      return { tr: p1, en: p2 };
+    }
+    if (trVerbRegex.test(p2) && !trVerbRegex.test(p1)) {
+      return { tr: p2, en: p1 };
+    }
+
+    // " / " veya birden fazla kelime Türkçe açıklamada daha sık olur
+    if (p1.includes("/") && !p2.includes("/")) return { tr: p1, en: p2 };
+    if (p2.includes("/") && !p1.includes("/")) return { tr: p2, en: p1 };
+
+    // Eğer iki tarafta da bariz bir Türkçe ipucu yoksa (örn: "cat = kedi" gibi düz kelimeler):
+    // Varsayılan kural: Eğer sol taraf saf İngilizce fonetiğine benziyorsa veya kullanıcı genelde en=tr giriyorsa
+    // Kullanıcı ilk kısma İngilizce yazsa bile:
+    return { tr: p2, en: p1 }; // Varsayılan: Sol İngilizce, Sağ Türkçe
+  }
+
   function pickRandomWord() {
-    if (!words || words.length === 0) return;
+    if (!words || words.length === 0) {
+      document.getElementById("promptWord").textContent = "Havuzda kelime yok!";
+      return;
+    }
     
     let totalWeight = words.reduce((sum, w) => sum + w.weight, 0);
     let rand = Math.random() * totalWeight;
@@ -207,41 +267,57 @@
     }
   }
 
-  function saveBulkWords() {
+  // Havuzu SİLMEYEN, üzerine ekleyen fonksiyon
+  function addBulkWords() {
     const raw = document.getElementById("bulkInput").value.trim();
     if (!raw) return;
 
     const lines = raw.split("\n");
-    const newWords = [];
+    let addedCount = 0;
 
     lines.forEach(line => {
       const parts = line.split("=");
       if (parts.length === 2) {
-        const trPart = parts[0].trim().toLowerCase();
-        const enPart = parts[1].trim().toLowerCase();
-        if (trPart && enPart) {
-          newWords.push({
-            tr: trPart,
-            en: enPart,
-            weight: 3
-          });
+        let p1 = parts[0].trim().toLowerCase();
+        let p2 = parts[1].trim().toLowerCase();
+
+        if (p1 && p2) {
+          // Otomatik Türkçe - İngilizce tespiti
+          let pair = detectPair(p1, p2);
+
+          // Havuzda zaten var mı kontrol et (aynısını tekrar eklemesin)
+          let exists = words.find(w => w.tr === pair.tr || w.en === pair.en);
+          if (exists) {
+            exists.tr = pair.tr;
+            exists.en = pair.en;
+          } else {
+            words.push({
+              tr: pair.tr,
+              en: pair.en,
+              weight: 3
+            });
+            addedCount++;
+          }
         }
       }
     });
 
-    if (newWords.length > 0) {
-      words = newWords;
+    saveToStorage();
+    document.getElementById("bulkInput").value = "";
+    alert(`${addedCount} yeni kelime havuza eklendi! Toplam kelime: ${words.length}`);
+    pickRandomWord();
+  }
+
+  function clearAllWords() {
+    if (confirm("Tüm kelime havuzunu temizlemek istediğinden emin misin?")) {
+      words = [];
       saveToStorage();
-      alert(words.length + " kelime başarıyla yüklendi!");
-      document.getElementById("bulkInput").value = "";
       pickRandomWord();
-    } else {
-      alert("Format hatalı! Her satıra 'türkçe = ingilizce' yazmalısın.");
     }
   }
 
   function updateStats() {
-    document.getElementById("stats").textContent = "Toplam Kelime: " + words.length;
+    document.getElementById("stats").textContent = "Toplam Kelime: " + (words ? words.length : 0);
   }
 
   updateStats();
