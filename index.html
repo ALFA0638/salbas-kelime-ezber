@@ -24,7 +24,7 @@
       padding: 25px; 
       border-radius: 16px; 
       width: 100%; 
-      max-width: 480px; 
+      max-width: 500px; 
       box-shadow: 0 10px 25px rgba(0,0,0,0.5); 
     }
     h2 { 
@@ -129,7 +129,32 @@
     .info-text {
       margin: 6px 0; 
       font-size: 0.8rem;
-      color: #cbd5e1;
+      color: #cbd5e1; 
+    }
+    .word-list {
+      max-height: 160px;
+      overflow-y: auto;
+      margin-top: 12px;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 8px;
+    }
+    .word-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      border-bottom: 1px solid #1e293b;
+      font-size: 0.85rem;
+    }
+    .del-btn {
+      width: auto;
+      padding: 3px 8px;
+      margin: 0;
+      font-size: 0.75rem;
+      background: #ef4444;
+      color: white;
+      border-radius: 4px;
     }
   </style>
 </head>
@@ -138,7 +163,7 @@
 <div class="card">
   <h2>Kelime Pratiği</h2>
   
-  <div class="word-box" id="promptWord">Yükleniyor...</div>
+  <div class="word-box" id="promptWord">Havuzda kelime yok!</div>
   
   <form id="quizForm" onsubmit="event.preventDefault(); checkAnswer();">
     <input type="text" id="answerInput" placeholder="İngilizce karşılığını yaz..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
@@ -148,79 +173,712 @@
   <div class="feedback" id="feedback"></div>
   <div class="stats" id="stats">Havuz: 0 kelime</div>
 
-  <details>
+  <details open>
     <summary>Kelime Ekle / Havuzu Yönet</summary>
     <p class="info-text">
-      İster <b>Türkçe = İngilizce</b>, ister <b>İngilizce = Türkçe</b> yaz. Fark etmez, sistem Türkçesini bulup sana soracak. Yeni eklediklerin eskilerin üzerine eklenir, silinmez!
+      Kelimeleri alt alta yapıştır. İster <b>Türkçe = İngilizce</b>, ister <b>İngilizce = Türkçe</b> yaz. Sistem harf hatalarını 2.000 kelimelik sözlükle otomatik denetler.
     </p>
-    <textarea id="bulkInput" placeholder="bridge = köprü&#10;ödünç almak = borrow&#10;crowded = kalabalık"></textarea>
-    <button type="button" class="btn-secondary" onclick="addBulkWords()">Havuza Ekle (Üstüne Ekle)</button>
-    <button type="button" class="btn-danger" onclick="clearAllWords()" style="margin-top: 15px;">Tüm Kelimeleri Sıfırla (Temizle)</button>
+    <textarea id="bulkInput" placeholder="car = araba&#10;borrow = ödünç almak&#10;bridge = köprü"></textarea>
+    <button type="button" class="btn-secondary" onclick="addBulkWords()">Havuza Ekle</button>
+    
+    <div class="word-list" id="wordListContainer"></div>
+
+    <button type="button" class="btn-danger" onclick="clearAllWords()" style="margin-top: 15px;">Tüm Kelimeleri Sıfırla</button>
   </details>
 </div>
 
 <script>
-  const defaultWords = [
-    { tr: "köprü", en: "bridge", weight: 3 },
-    { tr: "tehlikeli", en: "dangerous", weight: 3 },
-    { tr: "ödünç almak", en: "borrow", weight: 3 },
-    { tr: "borçlu olmak", en: "owe", weight: 3 },
-    { tr: "hayran olmak", en: "admire", weight: 3 },
-    { tr: "çanta / el çantası", en: "purse", weight: 3 },
-    { tr: "kalabalık", en: "crowded", weight: 3 },
-    { tr: "bizi / bize", en: "us", weight: 3 },
-    { tr: "mobilya", en: "furniture", weight: 3 },
-    { tr: "ödünç vermek", en: "lend", weight: 3 },
-    { tr: "diş macunu", en: "toothpaste", weight: 3 },
-    { tr: "nefret etmek", en: "hate", weight: 3 },
-    { tr: "hücre", en: "cell", weight: 3 },
-    { tr: "geliştirmek", en: "develop", weight: 3 }
+  // Genişletilmiş 2.000 Kelimelik Referans Sözlük (Yazım Hatası / Typo Denetimi İçin)
+  const commonDictionary = [
+    "abandon","ability","able","abortion","about","above","abroad","absence","absolute","absolutely",
+    "absorb","abstract","abuse","academic","accelerate","accent","accept","acceptable","access","accessible",
+    "accident","accommodate","accommodation","accompany","accomplish","accomplishment","accord","according","account","accountability",
+    "accurate","accurately","accuse","achieve","achievement","acid","acknowledge","acquire","acquisition","across",
+    "act","action","activate","active","actively","activist","activity","actor","actress","actual",
+    "actually","acute","adapt","adaptation","add","addiction","addition","additional","additionally","address",
+    "adequate","adequately","adjust","adjustment","administer","administration","administrative","administrator","admire","admission",
+    "admit","adolescent","adopt","adoption","adult","advance","advanced","advantage","adventure","advertise",
+    "advertisement","advertising","advice","advise","adviser","advocate","affair","affect","affection","afford",
+    "affordable","afraid","after","afternoon","afterward","again","against","age","agency","agenda",
+    "agent","aggression","aggressive","ago","agree","agreement","agricultural","agriculture","ahead","aid",
+    "aide","aim","air","aircraft","airline","airport","alarm","album","alcohol","alcoholic",
+    "alert","alien","align","alike","alive","all","allegation","allege","alleged","allegedly",
+    "alliance","allocate","allocation","allow","allowance","ally","almost","alone","along","alongside",
+    "already","also","alter","alternative","alternatively","although","altogether","always","amateur","amazing",
+    "ambassador","ambition","ambitious","amendment","among","amount","ample","analysis","analyst","analyze",
+    "ancestor","ancient","and","anger","angle","angry","animal","ankle","anniversary","announce",
+    "announcement","annoy","annual","annually","anonymous","another","answer","anticipate","anxiety","anxious",
+    "any","anybody","anymore","anyone","anything","anyway","anywhere","apart","apartment","apologize",
+    "apology","apparent","apparently","appeal","appear","appearance","apple","application","apply","appoint",
+    "appointment","appreciate","appreciation","approach","appropriate","appropriately","approval","approve","approximate","approximately",
+    "architect","architecture","archive","area","arena","argue","argument","arise","arm","armed",
+    "army","around","arrange","arrangement","array","arrest","arrival","arrive","arrow","art",
+    "article","articulate","artificial","artist","artistic","as","ash","aside","ask","asleep",
+    "aspect","aspiration","aspire","assault","assemble","assembly","assert","assess","assessment","asset",
+    "assign","assignment","assist","assistance","assistant","associate","associated","association","assume","assumption",
+    "assurance","assure","astonishing","athlete","athletic","atmosphere","attach","attachment","attack","attain",
+    "attempt","attend","attendance","attention","attitude","attorney","attract","attraction","attractive","attribute",
+    "auction","audience","audit","authentic","author","authority","authorization","authorize","auto","automatic",
+    "automatically","automobile","autonomous","autonomy","availability","available","avenue","average","avoid","await",
+    "award","aware","awareness","away","awful","baby","back","background","backing","backward",
+    "bacteria","bad","badly","bag","bake","balance","balanced","ball","ballet","balloon",
+    "ballot","ban","banana","band","bank","banker","banking","bankrupt","bankruptcy","banner",
+    "bar","bare","barely","bargain","barrel","barrier","base","baseball","based","basement",
+    "basic","basically","basis","basket","basketball","bass","bat","bath","bathroom","battery",
+    "battle","battlefield","bay","beach","beam","bean","bear","beard","beast","beat",
+    "beautiful","beauty","because","become","bed","bedroom","beef","beer","before","beg",
+    "begin","beginner","beginning","behalf","behave","behavior","behavioral","behind","being","belief",
+    "believe","bell","belong","beloved","below","belt","bench","benchmark","bend","beneath",
+    "benefit","bent","beside","besides","best","bet","better","between","beyond","bias",
+    "bible","bicycle","bid","big","bike","bill","billion","bind","biography","biological",
+    "biology","bird","birth","birthday","bishop","bit","bite","bitter","bizarre","black",
+    "blade","blame","blank","blanket","blast","bleed","blend","bless","blessing","blind",
+    "block","blog","blood","bloody","bloom","blow","blue","board","boast","boat",
+    "body","boil","bold","bolt","bomb","bombing","bond","bone","bonus","book",
+    "boost","boot","booth","border","bored","boring","born","borrow","boss","both",
+    "bother","bottle","bottom","bounce","boundary","bow","bowl","box","boy","brain",
+    "branch","brand","brave","bread","break","breakdown","breakfast","breakthrough","breast","breath",
+    "breathe","breathing","breed","breeze","brick","bride","bridge","brief","briefly","bright",
+    "brilliant","bring","broad","broadcast","broadcaster","broadly","broken","broker","bronze","brother",
+    "brown","brush","bubble","buck","bucket","buddy","budget","build","builder","building",
+    "bullet","bunch","burden","bureau","bureaucracy","burn","burning","burst","bury","bus",
+    "bush","business","businessman","busy","but","butter","button","buy","buyer","cabin",
+    "cabinet","cable","cafe","cage","cake","calculate","calculation","calculator","calendar","call",
+    "calm","camera","camp","campaign","campus","can","cancel","cancer","candidate","candle",
+    "candy","canvas","cap","capability","capable","capacity","capital","capitalism","captain","capture",
+    "car","carbon","card","cardiac","care","career","careful","carefully","careless","cargo",
+    "carpet","carrier","carrot","carry","cart","case","cash","casino","cast","casual",
+    "casualty","cat","catalog","catalyst","catch","category","cater","cattle","cause","caution",
+    "cautious","cave","cease","ceiling","celebrate","celebration","celebrity","cell","cemetery","census",
+    "center","central","century","ceremony","certain","certainly","certainty","certificate","chain","chair",
+    "chairman","challenge","chamber","champion","championship","chance","change","changing","channel","chaos",
+    "chapel","chapter","character","characteristic","characterize","charge","charity","charm","charming","chart",
+    "charter","chase","chat","cheap","cheat","check","cheek","cheer","cheese","chef",
+    "chemical","chemistry","chest","chicken","chief","child","childhood","chill","chin","chip",
+    "chocolate","choice","cholesterol","choose","chronic","church","cigarette","cinema","circle","circuit",
+    "circulate","circulation","circumstance","cite","citizen","citizenship","city","civic","civil","civilian",
+    "civilization","claim","clan","clarify","clarity","clash","class","classic","classical","classification",
+    "classify","classroom","clause","clean","cleaner","clear","clearly","clerk","clever","client",
+    "climate","climb","cling","clinic","clinical","clip","clock","close","closed","closely",
+    "closer","closet","cloth","clothes","clothing","cloud","club","clue","cluster","coach",
+    "coal","coalition","coast","coastal","coat","cocktail","code","coffee","cognitive","coincide",
+    "coincidence","cold","collaborate","collaboration","collaborative","collapse","collar","colleague","collect","collection",
+    "collective","collector","college","collision","colonial","colony","color","colorful","column","columnist",
+    "combat","combination","combine","combined","come","comedy","comfort","comfortable","comfortably","command",
+    "commander","comment","commentary","commentator","commercial","commission","commissioner","commit","commitment","committee",
+    "commodity","common","commonly","communicate","communication","community","companion","company","comparable","comparative",
+    "compare","comparison","compassion","compel","compelling","compensate","compensation","compete","competence","competent",
+    "competition","competitive","competitor","compile","complain","complaint","complement","complete","completely","complex",
+    "complexity","compliance","complicate","complicated","complication","comply","component","compose","composer","composition",
+    "compound","comprehensive","compromise","compulsory","computation","compute","computer","conceal","concede","conceive",
+    "concentrate","concentration","concept","conception","concern","concerned","concerning","concert","concession","conclude",
+    "conclusion","concrete","concur","condition","conduct","conductor","conference","confess","confession","confidence",
+    "confident","configure","confine","confined","confirm","confirmation","conflict","conform","confront","confrontation",
+    "confuse","confused","confusing","confusion","congratulate","congratulations","congress","congressional","connect","connection",
+    "conquer","conscience","conscious","consciousness","consecutive","consensus","consent","consequence","consequently","conservation",
+    "conservative","consider","considerable","considerably","consideration","consist","consistent","consistently","consolidate","constant",
+    "constantly","constitute","constitution","constitutional","constrain","constraint","construct","construction","consult","consultant",
+    "consultation","consume","consumer","consumption","contact","contain","container","contemplate","contemporary","contempt",
+    "contend","contender","content","contention","contest","contestant","context","continent","continental","continue",
+    "continued","continuing","continuous","continuously","contract","contractor","contradict","contradiction","contrary","contrast",
+    "contribute","contribution","contributor","control","controller","controversial","controversy","convenience","convenient","convention",
+    "conventional","conversation","conversion","convert","convey","convict","conviction","convince","convinced","convincing",
+    "cook","cooking","cool","cooperate","cooperation","cooperative","coordinate","coordination","coordinator","cop",
+    "cope","copper","copy","copyright","cord","core","corn","corner","corporate","corporation",
+    "correct","correctly","correlation","correspond","correspondence","correspondent","corridor","corrupt","corruption","cost",
+    "costly","costume","cottage","cotton","couch","cough","could","council","counsel","counseling",
+    "counselor","count","counter","counterpart","countless","country","countryside","county","couple","courage",
+    "courageous","course","court","courtroom","cousin","cover","coverage","cow","crack","cradle",
+    "craft","crash","crawl","crazy","cream","create","creation","creative","creativity","creator",
+    "creature","credit","creep","crew","cricket","crime","criminal","crisis","criterion","critic",
+    "critical","critically","criticism","criticize","critique","crop","cross","crossing","crowd","crowded",
+    "crown","crucial","crucially","crude","cruel","cruelty","cruise","crush","cry","crystal",
+    "cue","cult","cultivate","cultural","culturally","culture","cup","cupboard","cure","curiosity",
+    "curious","currency","current","currently","curriculum","curtain","curve","curved","custody","custom",
+    "customer","customs","cut","cute","cycle","cylinder","daily","dairy","dam","damage",
+    "damn","dance","dancer","dancing","danger","dangerous","dare","dark","darkness","dash",
+    "data","database","date","daughter","dawn","day","daylight","dead","deadline","deadly",
+    "deal","dealer","dealing","dear","death","debate","debris","debt","debtor","decade",
+    "decay","decent","decide","decision","decisive","deck","declaration","declare","decline","decorate",
+    "decoration","decorative","decrease","decreased","dedicate","dedication","deem","deep","deeply","defeat",
+    "defend","defendant","defender","defense","defensive","deficiency","deficit","define","definite","definitely",
+    "definition","degree","delay","delegate","delegation","delete","deliberate","deliberately","delicate","delicious",
+    "delight","delighted","deliver","delivery","demand","demanding","democracy","democrat","democratic","demographic",
+    "demonstrate","demonstration","demonstrator","denial","dense","density","dentist","deny","depart","department",
+    "departure","depend","dependable","dependence","dependent","depict","deploy","deployment","deposit","depressed",
+    "depression","deprive","depth","deputy","derive","descend","descent","describe","description","desert",
+    "deserve","design","designate","designer","desirable","desire","desk","despair","desperate","desperately",
+    "despite","destination","destroy","destruction","destructive","detail","detailed","detain","detect","detection",
+    "detective","detector","determination","determine","determined","devastate","devastating","develop","developer","developing",
+    "development","developmental","device","devil","devise","devote","devoted","devotion","diagnose","diagnosis",
+    "diagram","dialogue","diamond","diary","dictate","dictionary","die","diet","dietary","differ",
+    "difference","different","differentiate","differently","difficult","difficulty","dig","digest","digital","dignity",
+    "dilemma","dimension","diminish","dining","dinner","dinosaur","dioxide","diploma","diplomat","diplomatic",
+    "direct","direction","directly","director","directory","dirt","dirty","disability","disabled","disadvantage",
+    "disagree","disagreement","disappear","disappoint","disappointed","disappointing","disappointment","disaster","disastrous","disc",
+    "discipline","disclose","disclosure","discount","discourage","discourse","discover","discovery","discretion","discrimination",
+    "discuss","discussion","disease","dish","disk","dismiss","dismissal","disorder","dispatch","displace",
+    "display","disposal","dispose","dispute","disrupt","disruption","dissolve","distance","distant","distinct",
+    "distinction","distinctive","distinguish","distort","distract","distraction","distribute","distribution","distributor","district",
+    "disturb","disturbing","dive","diver","diverse","diversity","divert","divide","dividend","divine",
+    "division","divorce","dna","dock","doctor","doctrine","document","documentary","documentation","dog",
+    "doll","dollar","domain","domestic","dominance","dominant","dominate","donation","donor","door",
+    "doorway","dose","dot","double","doubt","doubtful","down","download","downtown","downward",
+    "draft","drag","drain","drama","dramatic","dramatically","draw","drawer","drawing","dream",
+    "dress","drill","drink","drinking","drive","driver","driveway","drop","drought","drown",
+    "drug","drum","drunk","dry","dual","duck","due","dull","dumb","dump",
+    "duration","during","dust","dusty","duty","dwelling","dying","dynamic","eager","eagle",
+    "ear","early","earn","earning","earnings","earth","earthquake","ease","easily","east",
+    "eastern","easy","eat","echo","ecological","ecology","economic","economical","economically","economics",
+    "economist","economy","ecosystem","edge","edit","edition","editor","editorial","educate","educated",
+    "education","educational","educator","effect","effective","effectively","effectiveness","efficiency","efficient","efficiently",
+    "effort","egg","ego","eight","eighteen","eighth","eighty","either","elaborate","elastic",
+    "elbow","elder","elderly","elect","election","elective","electoral","electric","electrical","electricity",
+    "electron","electronic","electronics","elegant","element","elementary","elephant","elevate","elevation","elevator",
+    "eleven","eligible","eliminate","elimination","elite","eloquent","else","elsewhere","email","embark",
+    "embarrass","embarrassed","embarrassing","embarrassment","embassy","embed","embody","embrace","emerge","emergence",
+    "emergency","emerging","emission","emit","emotion","emotional","emotionally","emphasis","emphasize","empire",
+    "empirical","employ","employee","employer","employment","empower","empty","enable","enact","enclosed",
+    "encounter","encourage","encouragement","encouraging","encyclopedia","end","endangered","endeavor","ending","endless",
+    "endorse","endorsement","endure","enemy","energy","enforce","enforcement","engage","engaged","engagement",
+    "engine","engineer","engineering","enhance","enhancement","enjoy","enjoyable","enjoyment","enormous","enormously",
+    "enough","enquire","enquiry","enrich","enroll","enrollment","ensemble","ensure","enter","enterprise",
+    "entertain","entertainer","entertaining","entertainment","enthusiasm","enthusiastic","entire","entirely","entitle","entitled",
+    "entity","entrance","entrepreneur","entry","envelope","environment","environmental","environmentally","envision","epidemic",
+    "episode","equal","equality","equally","equation","equip","equipment","equipped","equivalent","era",
+    "erase","erect","error","erupt","eruption","escalate","escape","especially","essay","essence",
+    "essential","essentially","establish","establishment","estate","estimate","estimated","estimation","eternal","ethic",
+    "ethical","ethics","ethnic","ethnicity","evaluate","evaluation","eve","even","evening","evenly",
+    "event","eventual","eventually","ever","every","everybody","everyday","everyone","everything","everywhere",
+    "evidence","evident","evidently","evil","evolution","evolutionary","evolve","exact","exactly","exaggerate",
+    "exam","examination","examine","examiner","example","exceed","exceedingly","excellent","except","exception",
+    "exceptional","excess","excessive","exchange","excited","excitement","exciting","exclude","exclusion","exclusive",
+    "exclusively","excuse","execute","execution","executive","exempt","exercise","exert","exhaust","exhausted",
+    "exhaustion","exhibit","exhibition","exile","exist","existence","existing","exit","exotic","expand",
+    "expansion","expect","expectancy","expectation","expected","expedition","expense","expensive","experience","experienced",
+    "experiment","experimental","expert","expertise","expire","explain","explanation","explicit","explicitly","explode",
+    "exploit","exploitation","exploration","explore","explorer","explosion","explosive","export","expose","exposure",
+    "express","expression","expressive","extend","extension","extensive","extensively","extent","exterior","external",
+    "extra","extract","extraordinary","extreme","extremely","eye","eyebrow","fabric","fabulous","face",
+    "facilitate","facility","fact","factor","factory","faculty","fade","fail","failure","faint",
+    "fair","fairly","fairness","faith","faithful","fake","fall","false","fame","familiar",
+    "familiarity","family","famous","fan","fancy","fantasy","far","fare","farm","farmer",
+    "farming","fascinate","fascinating","fashion","fashionable","fast","fasten","fat","fatal","fate",
+    "father","fatigue","fault","faulty","favor","favorable","favorite","fear","fearful","feasible",
+    "feast","feat","feather","feature","federal","federation","fee","feed","feedback","feel",
+    "feeling","fellow","fellowship","female","feminine","feminist","fence","fertile","festival","fetch",
+    "fever","few","fewer","fiber","fiction","fictional","field","fierce","fiery","fifteen",
+    "fifth","fifty","fight","fighter","fighting","figure","file","fill","film","filmmaker",
+    "filter","filthy","final","finally","finance","financial","financially","financier","find","finding",
+    "fine","finger","finish","finished","finite","fire","firearm","firefighter","firework","firm",
+    "firmly","first","firstly","fiscal","fish","fisherman","fishing","fist","fit","fitness",
+    "five","fix","fixed","flag","flame","flash","flat","flavor","flaw","flawed",
+    "flee","fleet","flesh","flexibility","flexible","flick","flight","float","flood","floor",
+    "flour","flourish","flow","flower","flu","fluid","fly","flying","foam","focus",
+    "focused","fog","foggy","fold","folder","folk","follow","follower","following","fond",
+    "food","fool","foolish","foot","footage","football","footstep","for","forbid","force",
+    "forecast","forehead","foreign","foreigner","forensic","forest","forever","forget","forgive","fork",
+    "form","formal","formality","formally","format","formation","former","formerly","formidable","formula",
+    "formulate","forth","forthcoming","fortnight","fortress","fortunate","fortunately","fortune","forty","forum",
+    "forward","fossil","foster","foul","found","foundation","founder","fountain","four","fourteen",
+    "fourth","fraction","fracture","fragile","fragment","frame","framework","franchise","frank","frankly",
+    "fraud","freak","free","freedom","freely","freeze","freezer","freezing","freight","frequency",
+    "frequent","frequently","fresh","freshman","friction","fridge","friend","friendly","friendship","fright",
+    "frighten","frightened","frightening","frog","from","front","frontier","frost","frozen","fruit",
+    "frustrate","frustrated","frustrating","frustration","fuel","fulfill","fulfillment","full","fully","fume",
+    "fun","function","functional","fund","fundamental","fundamentally","funding","fundraiser","funeral","funny",
+    "fur","furious","furnace","furnish","furniture","further","furthermore","fury","fuse","fusion",
+    "future","gain","galaxy","gallery","gamble","gambling","game","gang","gap","garage",
+    "garbage","garden","gardener","gas","gasoline","gate","gateway","gather","gathering","gauge",
+    "gear","gender","gene","general","generalization","generalize","generally","generate","generation","generator",
+    "generic","generosity","generous","generously","genetic","genetics","genius","genre","gentle","gentleman",
+    "gently","genuine","genuinely","geographic","geography","geology","geometry","germ","gesture","ghost",
+    "giant","gift","gifted","gigantic","ginger","giraffe","girl","girlfriend","give","given",
+    "glad","glance","glare","glass","glasses","gleam","glimpse","global","globalization","globally",
+    "globe","gloom","gloomy","glorious","glory","glove","glow","glue","goal","goat",
+    "god","goddess","gold","golden","golf","good","goodbye","goodness","goods","gorgeous",
+    "gospel","gossip","govern","governance","government","governmental","governor","gown","grab","grace",
+    "graceful","grade","gradual","gradually","graduate","graduation","grain","grand","grandchild","grandfather",
+    "grandmother","grandparent","grant","grape","graph","graphic","grasp","grass","grateful","gratitude",
+    "grave","gravel","gravity","gray","great","greatly","greatness","greed","greedy","green",
+    "greet","greeting","grey","grief","grieve","grill","grim","grin","grind","grip",
+    "grocery","gross","ground","groundwater","group","grow","growing","grown","growth","guarantee",
+    "guard","guardian","guess","guest","guidance","guide","guideline","guilt","guilty","guitar",
+    "gum","gun","gut","guy","gym","gymnasium","habit","habitat","hair","haircut",
+    "half","halfway","hall","hallway","halt","hammer","hand","handful","handicap","handle",
+    "handsome","handy","hang","happen","happening","happily","happiness","happy","harass","harassment",
+    "harbor","hard","hardcore","hardly","hardness","hardship","hardware","harm","harmful","harmless",
+    "harmony","harsh","harvest","hat","hate","hatred","haunt","have","hawk","hazard",
+    "hazardous","head","headache","heading","headline","headquarters","heal","health","healthcare","healthy",
+    "hear","hearing","heart","heat","heater","heating","heaven","heavily","heavy","hedge",
+    "heel","height","heighten","helicopter","hell","hello","helmet","help","helpful","helpless",
+    "herald","herb","herd","here","heritage","hero","heroic","heroin","heroine","hesitate",
+    "hesitation","hidden","hide","hierarchy","high","highlight","highly","highway","hijack","hike",
+    "hiking","hill","himself","hint","hip","hire","historian","historic","historical","historically",
+    "history","hit","hitch","hobby","hockey","hold","holder","hole","holiday","hollow",
+    "holy","home","homeland","homeless","hometown","homework","honest","honestly","honesty","honey",
+    "honor","honorable","hook","hope","hopeful","hopefully","hopeless","horizon","horizontal","hormone",
+    "horn","horrible","horribly","horror","horse","hospital","hospitality","host","hostage","hostile",
+    "hostility","hot","hotel","hound","hour","hourly","house","household","housing","hover",
+    "how","however","howl","huge","hugely","human","humane","humanitarian","humanity","humble",
+    "humid","humidity","humiliate","humiliation","humor","humorous","hundred","hunger","hungry","hunt",
+    "hunter","hunting","hurdle","hurricane","hurry","hurt","husband","hut","hydrogen","hygiene",
+    "hypothesis","hypothetical","ice","icon","iconic","idea","ideal","ideally","identical","identification",
+    "identify","identity","ideological","ideology","idiot","idle","idol","if","ignorance","ignorant",
+    "ignore","ill","illegal","illegally","illness","illuminate","illusion","illustrate","illustration","image",
+    "imagery","imaginary","imagination","imaginative","imagine","immediate","immediately","immense","immensely","immigrant",
+    "immigration","imminent","immune","immunity","impact","impair","impaired","impatient","imperative","imperfect",
+    "implement","implementation","implication","implicit","imply","import","importance","important","importantly","impose",
+    "impossible","impress","impression","impressive","imprison","improve","improved","improvement","impulse","inability",
+    "inadequate","inappropriate","incentive","inch","incidence","incident","incidentally","incline","inclined","include",
+    "including","inclusion","inclusive","income","incorporate","incorporated","increase","increased","increasing","increasingly",
+    "incredible","incredibly","incur","indeed","independence","independent","independently","index","indicate","indication",
+    "indicator","indictment","indifference","indifferent","indigenous","indirect","indirectly","individual","individually","indoor",
+    "indoors","induce","indulge","industrial","industrialized","industry","ineffective","inefficiency","inefficient","inequality",
+    "inevitable","inevitably","inexpensive","infant","infantry","infect","infection","infectious","infer","inferior",
+    "infinite","inflation","influence","influential","inform","informal","informant","information","infrastructure","infrequent",
+    "ingredient","inhabit","inhabitant","inherent","inherently","inherit","inheritance","inhibit","inhibition","initial",
+    "initially","initiate","initiative","inject","injection","injure","injured","injury","injustice","ink",
+    "inmate","inn","inner","innocence","innocent","innovate","innovation","innovative","innovator","input",
+    "inquire","inquiry","insane","insect","insecure","insert","insertion","inside","insider","insight",
+    "insightful","insist","inspect","inspection","inspector","inspiration","inspire","inspired","install","installation",
+    "instance","instant","instantly","instead","instinct","instinctive","institute","institution","institutional","instruct",
+    "instruction","instructional","instructor","instrument","instrumental","insufficient","insult","insurance","insure","intact",
+    "intake","integral","integrate","integrated","integration","integrity","intellect","intellectual","intelligence","intelligent",
+    "intend","intended","intense","intensely","intensify","intensity","intensive","intent","intention","intentional",
+    "intentionally","interact","interaction","interactive","interest","interested","interesting","interface","interfere","interference",
+    "interim","interior","intermediate","internal","internally","international","internationally","internet","interpret","interpretation",
+    "interrupt","interruption","interval","intervene","intervention","interview","interviewer","intimate","intimidate","into",
+    "intricate","intrigue","intrinsic","introduce","introduction","introductory","intrude","invade","invader","invalid",
+    "invaluable","invasion","invent","invention","inventor","inventory","invest","investigate","investigation","investigator",
+    "investment","investor","invisible","invitation","invite","inviting","invoke","involve","involved","involvement",
+    "inward","iron","ironic","ironically","irony","island","isolate","isolated","isolation","issue",
+    "item","ivory","jacket","jail","jam","jar","jaw","jazz","jealous","jealousy",
+    "jeans","jet","jewel","jewelry","job","join","joint","jointly","joke","journal",
+    "journalism","journalist","journey","joy","joyful","judge","judgment","judicial","judiciary","juice",
+    "jump","junction","jungle","junior","jurisdiction","juror","jury","just","justice","justification",
+    "justify","juvenile","keen","keep","keeper","kettle","key","keyboard","kick","kid",
+    "kidnap","kidney","kill","killer","killing","kin","kind","kindness","king","kingdom",
+    "kiss","kit","kitchen","kite","knee","kneel","knife","knight","knit","knob",
+    "knock","knot","know","knowledge","knowledgeable","known","label","labor","laboratory","lack",
+    "ladder","lady","lake","lamb","lamp","land","landing","landlord","landmark","landscape",
+    "lane","language","lap","large","largely","laser","last","lasting","late","lately",
+    "later","lateral","latest","latter","laugh","laughter","launch","laundry","law","lawful",
+    "lawn","lawsuit","lawyer","lay","layer","layout","lazy","lead","leader","leadership",
+    "leading","leaf","leaflet","league","leak","lean","leap","learn","learned","learning",
+    "lease","least","leather","leave","lecture","lecturer","left","leg","legacy","legal",
+    "legally","legend","legendary","legislation","legislative","legislator","legislature","legitimate","leisure","lemon",
+    "lend","length","lens","leopard","less","lessen","lesser","lesson","let","lethal",
+    "letter","level","lever","leverage","levy","liability","liable","liberal","liberation","liberty",
+    "library","license","lick","lid","lie","life","lifelong","lifestyle","lifetime","lift",
+    "light","lighting","lightly","lightning","like","likelihood","likely","likewise","limb","lime",
+    "limit","limitation","limited","line","linear","linen","linger","link","lion","lip",
+    "liquid","liquor","list","listen","listener","literacy","literal","literally","literary","literature",
+    "litter","little","live","lively","liver","living","load","loan","lobby","lobbying",
+    "local","locally","locate","located","location","lock","locker","lodge","log","logging",
+    "logic","logical","logistics","lonely","long","longevity","longtime","look","loom","loop",
+    "loose","loosely","loosen","lord","lose","loser","loss","lost","lot","lottery",
+    "loud","loudly","lounge","love","lovely","lover","low","lower","loyal","loyalty",
+    "luck","lucky","luggage","lumber","lump","lunar","lunch","luncheon","lung","lure",
+    "luxury","machine","machinery","mad","magazine","magic","magical","magician","magistrate","magnet",
+    "magnetic","magnificent","magnify","magnitude","mail","main","mainland","mainly","mainstream","maintain",
+    "maintenance","major","majority","make","maker","makeup","male","mall","mammal","manage",
+    "management","manager","managerial","managing","mandate","mandatory","manifest","manipulate","manipulation","mankind",
+    "manner","manual","manually","manufacture","manufacturer","manufacturing","manuscript","many","map","marathon",
+    "marble","march","margin","marginal","marine","mark","marked","marker","market","marketing",
+    "marketplace","marriage","married","marry","marsh","mask","mass","massacre","massive","master",
+    "masterpiece","match","mate","material","maternal","mathematical","mathematics","maths","matrix","matter",
+    "mature","maturity","maximum","may","maybe","mayor","meadow","meal","mean","meaning",
+    "meaningful","meaningless","meantime","meanwhile","measure","measurement","meat","mechanic","mechanical","mechanism",
+    "medal","media","medial","mediate","medical","medication","medicine","medieval","mediocre","meditation",
+    "medium","meet","meeting","melody","melt","member","membership","membrane","memo","memorable",
+    "memorial","memory","menace","mental","mentally","mention","mentor","menu","merchandise","merchant",
+    "mercy","mere","merely","merge","merger","merit","mess","message","messenger","metal",
+    "metaphor","meter","method","methodology","meticulous","metro","metropolitan","middle","midnight","midst",
+    "might","mighty","migrate","migration","mild","mildly","mile","military","militia","milk",
+    "mill","million","millennium","mind","mine","miner","mineral","minimal","minimize","minimum",
+    "minister","ministry","minor","minority","mint","minute","miracle","mirror","mischief","misery",
+    "mislead","misleading","miss","missile","missing","mission","missionary","mist","mistake","mistaken",
+    "mix","mixed","mixture","mobile","mobility","mobilize","mode","model","moderate","moderately",
+    "modern","modernize","modest","modesty","modification","modify","module","moisture","molecule","moment",
+    "momentary","momentum","monarch","monarchy","monastery","monetary","money","monitor","monkey","monopoly",
+    "monster","month","monthly","monument","mood","moon","moonlight","moral","morale","morality",
+    "more","moreover","morning","mortal","mortality","mortgage","mosaic","mosque","mosquito","most",
+    "mostly","motel","mother","motion","motivate","motivated","motivation","motive","motor","motorcycle",
+    "motorist","mount","mountain","mountainous","mourn","mouse","mouth","move","movement","movie",
+    "much","mud","muddy","multiple","multiply","multitude","municipal","murder","murderer","muscle",
+    "museum","mushroom","music","musical","musician","must","mustard","mutation","mute","mutter",
+    "mutual","mutually","mystery","mysterious","myth","mythology","nail","naked","name","namely",
+    "narrative","narrator","narrow","narrowly","nasal","nasty","nation","national","nationwide","native",
+    "natural","naturally","nature","naval","navigate","navigation","near","nearby","nearly","neat",
+    "neatly","necessarily","necessary","necessity","neck","necklace","need","needle","negative","neglect",
+    "negotiate","negotiation","neighbor","neighborhood","neighboring","neither","nephew","nerve","nervous","nervously",
+    "nest","net","network","neutral","neutrality","never","nevertheless","new","newborn","newly",
+    "news","newspaper","next","nice","nicely","niche","niece","night","nightmare","nine",
+    "nineteen","ninety","ninth","noble","nobody","nod","noise","noisy","nominate","nomination",
+    "nominee","none","nonetheless","nonsense","noodle","noon","nor","norm","normal","normally",
+    "north","northeast","northern","northwest","nose","nostalgia","not","notable","notably","note",
+    "notebook","noted","nothing","notice","noticeable","notification","notify","notion","notorious","noun",
+    "novel","novelist","novelty","now","nowadays","nowhere","nuclear","nucleus","nuisance","number",
+    "numerous","nurse","nursery","nurture","nut","nutrient","nutrition","nutritional","nutshell","oak",
+    "oath","obedient","obesity","obey","object","objection","objective","obligation","oblige","obliged",
+    "obscene","obscure","observation","observe","observer","obsess","obsession","obstacle","obtain","obtainable",
+    "obvious","obviously","occasion","occasional","occasionally","occupation","occupational","occupy","occur","occurrence",
+    "ocean","odd","oddly","odds","odor","off","offence","offend","offender","offense",
+    "offensive","offer","offering","office","officer","official","officially","offset","offshore","often",
+    "oil","okay","old","olympic","omission","omit","once","one","ongoing","onion",
+    "online","only","onset","onto","open","opener","opening","openly","opera","operate",
+    "operating","operation","operational","operator","opinion","opponent","opportunity","oppose","opposed","opposing",
+    "opposite","opposition","oppress","oppression","optic","optical","optimism","optimistic","optimum","option",
+    "optional","oral","orange","orbit","orchestra","order","orderly","ordinary","ore","organ",
+    "organic","organism","organization","organizational","organize","organized","organizer","orientation","origin","original",
+    "originally","originate","ornament","orphan","orthodox","other","otherwise","ought","ounce","our",
+    "ourselves","out","outbreak","outcome","outdoor","outdoors","outer","outfit","outgoing","outing",
+    "outlet","outline","outlook","output","outrage","outrageous","outright","outset","outside","outsider",
+    "outstanding","outward","oval","oven","over","overall","overcome","overflow","overhead","overlook",
+    "overnight","overseas","oversee","oversight","overtake","overthrow","overwhelm","overwhelming","owe","owing",
+    "owl","own","owner","ownership","oxygen","pace","pack","package","packaging","packet",
+    "pact","pad","paddle","page","paid","pain","painful","painkiller","paint","painter",
+    "painting","pair","palace","pale","palm","pan","panel","panic","pant","pants",
+    "paper","paperwork","parade","paradise","paradox","paragraph","parallel","parameter","paralyze","paramount",
+    "parcel","pardon","parent","parental","parish","park","parking","parliament","parliamentary","part",
+    "partial","partially","participant","participate","participation","particle","particular","particularly","partly","partner",
+    "partnership","party","pass","passage","passenger","passing","passion","passionate","passive","past",
+    "paste","pastime","pastor","pasture","patch","patent","path","pathology","pathway","patience",
+    "patient","patiently","patrol","patron","pattern","pause","pavement","pay","payment","payroll",
+    "peace","peaceful","peacefully","peach","peak","peanut","pear","pearl","peasant","peculiar",
+    "pedestrian","peel","peer","pen","penalty","pencil","penetrate","pension","pensioner","people",
+    "pepper","per","perceive","perceived","percentage","perception","perch","perfect","perfection","perfectly",
+    "perform","performance","performer","perfume","perhaps","period","periodic","periodical","perish","permanent",
+    "permanently","permission","permit","perpetual","perplex","persist","persistent","person","personal","personality",
+    "personally","personnel","perspective","persuade","persuasion","persuasive","pest","pet","petition","petrol",
+    "petroleum","phantom","phase","phenomenon","philosophy","phone","photo","photograph","photographer","photographic",
+    "photography","phrase","physical","physically","physician","physicist","physics","physiological","physiology","piano",
+    "pick","picture","picturesque","piece","pierce","pig","pigeon","pile","pill","pillar",
+    "pillow","pilot","pin","pinch","pine","pink","pioneer","pipe","pipeline","pirate",
+    "pit","pitch","pity","place","placement","plain","plaintiff","plan","plane","planet",
+    "planetary","plank","planner","planning","plant","plantation","plastic","plate","plateau","platform",
+    "plausible","play","player","playful","playground","playwright","plea","plead","pleasant","pleasantly",
+    "please","pleased","pleasure","pledge","plentiful","plenty","plot","plow","plug","plunge",
+    "plural","plus","pneumonia","pocket","poem","poet","poetic","poetry","point","pointed",
+    "pointer","poison","poisonous","pole","police","policeman","policy","polish","polite","politely",
+    "political","politically","politician","politics","poll","pollution","polymer","pond","ponder","pool",
+    "poor","poorly","pop","pope","popular","popularity","popularly","populate","population","porch",
+    "pork","port","portable","portfolio","portion","portrait","portray","portrayal","pose","position",
+    "positive","positively","possess","possession","possibility","possible","possibly","post","postage","postal",
+    "postcard","poster","postpone","pot","potato","potential","potentially","pottery","pouch","poultry",
+    "pound","pour","poverty","powder","power","powerful","powerfully","practical","practically","practice",
+    "practitioner","praise","pray","prayer","preach","preacher","precaution","precede","precedent","preceding",
+    "precious","precise","precisely","precision","predator","predecessor","predict","predictable","prediction","predominant",
+    "predominantly","prefer","preferable","preference","pregnant","pregnancy","prehistoric","prejudice","preliminary","premise",
+    "premium","preparation","preparatory","prepare","prepared","prescribe","prescription","presence","present","presentation",
+    "presenter","presently","preservation","preserve","preside","presidency","president","presidential","press","pressure",
+    "prestige","prestigious","presumably","presume","presumption","pretend","pretext","pretty","prevail","prevalent",
+    "prevent","prevention","preventive","preview","previous","previously","prey","price","priceless","pride",
+    "priest","primary","primarily","prime","primitive","prince","princess","principal","principally","principle",
+    "print","printer","printing","prior","priority","prison","prisoner","privacy","private","privately",
+    "privilege","privileged","prize","probability","probable","probably","probe","problem","problematic","procedure",
+    "proceed","proceeding","proceeds","process","processing","procession","processor","proclaim","produce","producer",
+    "product","production","productive","productivity","profession","professional","professionally","professor","proficiency","proficient",
+    "profile","profit","profitable","profound","profoundly","prognosis","program","programmer","programming","progress",
+    "progressive","prohibit","prohibition","project","projection","projector","prolong","prominence","prominent","prominently",
+    "promise","promising","promote","promoter","promotion","prompt","promptly","prone","pronounce","pronounced",
+    "pronunciation","proof","propaganda","propel","proper","properly","property","prophecy","prophet","proportion",
+    "proportional","proportionate","proposal","propose","proposed","proposition","prosecute","prosecution","prosecutor","prospect",
+    "prospective","prospectus","prosperity","prosperous","protect","protection","protective","protector","protein","protest",
+    "protester","protocol","prototype","proud","proudly","prove","proven","provide","provided","provider",
+    "providing","province","provincial","provision","provisional","provocation","provoke","prowess","proximity","prudent",
+    "psychiatric","psychiatrist","psychiatry","psychological","psychologically","psychologist","psychology","public","publication","publicity",
+    "publicly","publish","publisher","publishing","pulp","pulse","pump","punch","punctual","punish",
+    "punishable","punishment","pupil","purchase","purchaser","pure","purely","purge","purity","purple",
+    "purpose","purposeful","purposely","purse","pursue","pursuit","push","put","puzzle","puzzled",
+    "qualification","qualified","qualify","qualitative","quality","quantitative","quantity","quarantine","quarrel","quarry",
+    "quarter","quarterly","queen","query","quest","question","questionable","questionnaire","queue","quick",
+    "quickly","quiet","quietly","quit","quite","quota","quotation","quote","rabbit","race",
+    "racial","racism","racist","rack","radar","radiant","radiate","radiation","radical","radically",
+    "radio","radioactive","rage","raid","rail","railroad","railway","rain","rainbow","raincoat",
+    "rainfall","rainy","raise","rally","ramp","ranch","random","randomly","range","rank",
+    "ranking","rapid","rapidly","rare","rarely","rarity","rash","rat","rate","rather",
+    "ratification","ratify","ratio","ration","rational","rationalize","raw","ray","reach","react",
+    "reaction","reactionary","reactor","read","reader","readily","readiness","reading","ready","real",
+    "realistic","realistically","reality","realization","realize","really","realm","reap","rear","reason",
+    "reasonable","reasonably","reasoning","reassure","reassurance","rebel","rebellion","rebellious","rebound","rebuff",
+    "recall","receipt","receive","receiver","recent","recently","reception","receptionist","receptor","recess",
+    "recession","recipe","recipient","reciprocal","reckon","reclaim","recognition","recognize","recognized","recollect",
+    "recommend","recommendation","reconcile","reconciliation","record","recorder","recording","recover","recovery","recruit",
+    "recruitment","rectangle","rectangular","recur","recycle","recurrent","red","redeem","reduce","reduction",
+    "redundant","reef","refer","referee","reference","referendum","refine","refined","refinement","reflect",
+    "reflection","reflective","reflex","reform","reformer","refrain","refresh","refreshing","refuge","refugee",
+    "refund","refusal","refuse","refute","regard","regarding","regardless","regime","regiment","region",
+    "regional","register","registration","registry","regret","regrettable","regular","regularity","regularly","regulate",
+    "regulation","regulatory","rehabilitate","rehabilitation","rehearse","rehearsal","reign","reinforce","reinforcement","reject",
+    "rejection","rejoice","relate","related","relation","relationship","relative","relatively","relax","relaxation",
+    "relay","release","relevance","relevant","reliability","reliable","reliance","reliant","relief","relieve",
+    "relieved","religion","religious","reluctance","reluctant","reluctantly","rely","remain","remainder","remaining",
+    "remains","remark","remarkable","remarkably","remedy","remember","remind","reminder","remnant","remote",
+    "removal","remove","render","renew","renewable","renewal","renovate","renovation","renown","renowned",
+    "rent","rental","repair","repay","repeat","repeated","repeatedly","repel","repent","repertoire",
+    "replace","replacement","replica","replicate","reply","report","reportedly","reporter","reporting","repose",
+    "represent","representation","representative","repress","repression","reproach","reproduce","reproduction","reproductive","reptile",
+    "republic","republican","repudiate","reputation","repute","request","require","requirement","requisite","rescue",
+    "rescuer","research","researcher","resemblance","resemble","resent","resentful","resentment","reservation","reserve",
+    "reserved","reservoir","reside","residence","resident","residential","residual","residue","resign","resignation",
+    "resilience","resilient","resist","resistance","resistant","resolute","resolution","resolve","resort","resource",
+    "respect","respectable","respectful","respective","respectively","respond","respondent","response","responsibility","responsible",
+    "responsive","rest","restaurant","restoration","restore","restrain","restraint","restrict","restricted","restriction",
+    "restrictive","restructure","result","resultant","resume","resumption","retail","retailer","retain","retention",
+    "retire","retired","retirement","retreat","retrieve","retrospect","return","reunion","reveal","revelation",
+    "revenge","revenue","reverence","reverse","reversal","review","reviewer","revise","revision","revival",
+    "revive","revoke","revolt","revolution","revolutionary","reward","rhetoric","rhythm","rhythmic","rib",
+    "ribbon","rice","rich","riches","richly","rid","riddle","ride","rider","ridge",
+    "ridicule","ridiculous","rifle","right","righteous","rigid","rigorous","ring","riot","rip",
+    "ripe","ripen","rise","risk","risky","rite","ritual","rival","rivalry","river",
+    "road","roadway","roam","roar","roast","rob","robber","robbery","robe","robot",
+    "robust","rock","rocket","rocky","rod","role","roll","roller","romance","romantic",
+    "roof","room","root","rope","rose","rot","rotate","rotation","rotten","rough",
+    "roughly","round","roundabout","roundup","route","routine","routinely","row","royal","royalty",
+    "rub","rubber","rubbish","ruby","rude","rudely","rug","ruin","rule","ruler",
+    "ruling","rumor","run","runner","running","runway","rural","rush","rust","rustic",
+    "ruthless","sack","sacred","sacrifice","sad","saddle","sadly","sadness","safe","safely",
+    "safety","sail","sailing","sailor","saint","sake","salad","salary","sale","salmon",
+    "salon","salt","salty","salute","salvation","same","sample","sampling","sanction","sanctuary",
+    "sand","sandal","sandwich","sane","sanity","satellite","satisfaction","satisfactory","satisfy","satisfying",
+    "saturate","sauce","saucer","savage","save","saving","savings","savior","saw","say",
+    "scale","scan","scandal","scanner","scanty","scar","scarce","scarcely","scarcity","scare",
+    "scared","scarf","scary","scatter","scattered","scene","scenery","scenic","scent","schedule",
+    "scheme","scholar","scholarly","scholarship","school","science","scientific","scientifically","scientist","scissors",
+    "scold","scope","scorch","score","scorn","scout","scramble","scrap","scrape","scratch",
+    "scream","screen","screening","screw","screwdriver","script","scrutiny","sculpture","sculptor","sea",
+    "seal","seam","search","searching","seaside","season","seasonal","seat","second","secondary",
+    "secondly","secret","secretary","secrete","section","sector","secular","secure","securely","security",
+    "sediment","see","seed","seek","seeker","seem","seemingly","segment","segregate","segregation",
+    "seize","seizure","seldom","select","selection","selective","self","selfish","sell","seller",
+    "selling","semantic","semester","semiconductor","seminar","senate","senator","send","sender","senior",
+    "sensation","sensational","sense","sensible","sensitive","sensitivity","sensor","sensory","sentence","sentiment",
+    "separate","separately","separation","sequence","sequential","serial","series","serious","seriously","serum",
+    "servant","serve","server","service","session","set","setting","settle","settlement","settler",
+    "seven","seventeen","seventh","seventy","several","severe","severely","severity","sew","sewing",
+    "sex","sexual","sexuality","sexually","shade","shadow","shady","shaft","shake","shallow",
+    "shame","shameful","shape","shaped","share","shareholder","sharp","sharpen","sharply","shatter",
+    "shave","shear","shed","sheep","sheer","sheet","shelf","shell","shelter","shepherd",
+    "shield","shift","shine","shining","shiny","ship","shipment","shipping","shipwreck","shirt",
+    "shiver","shock","shocked","shocking","shoe","shoot","shooting","shop","shopper","shopping",
+    "shore","short","shortage","shortcut","shorten","shortly","shot","should","shoulder","shout",
+    "shove","show","shower","showcase","shrink","shroud","shrub","shrug","shut","shutter",
+    "shy","sibling","sick","sickness","side","sidebar","sidewalk","siege","sigh","sight",
+    "sightseeing","sign","signal","signature","significance","significant","significantly","signify","silence","silent",
+    "silk","silly","silver","similar","similarity","similarly","simple","simplicity","simplify","simply",
+    "simulate","simulation","simultaneous","simultaneously","sin","since","sincere","sincerely","sincerity","sing",
+    "singer","singing","single","singular","sink","sip","sir","siren","sister","sit",
+    "site","situation","six","sixteen","sixth","sixty","size","skeptical","sketch","skill",
+    "skilled","skillful","skin","skinny","skip","skirt","skull","sky","slam","slap",
+    "slash","slate","slaughter","slave","slavery","sleep","sleepy","sleeve","slender","slice",
+    "slide","slight","slightly","slim","slip","slipper","slippery","slit","slogan","slope",
+    "sloppy","slot","slow","slowly","slum","smart","smash","smell","smile","smoke",
+    "smoker","smoking","smooth","smoothly","smuggle","snake","snap","snapshot","snatch","sneak",
+    "sneeze","sniff","snow","snowfall","snowy","so","soak","soap","soar","sober",
+    "soccer","social","socialism","socialist","socialize","socially","society","sociocultural","socioeconomic","sociological",
+    "sociology","sock","socket","soda","sofa","soft","soften","softly","software","soil",
+    "solar","soldier","sole","solely","solemn","solicitor","solid","solidarity","solitary","solitude",
+    "solo","solution","solve","solvent","somber","some","somebody","somehow","someone","something",
+    "sometime","sometimes","somewhat","somewhere","son","song","songwriter","soon","soothe","sophisticated",
+    "sophistication","sore","sorrow","sorry","sort","soul","sound","soundtrack","soup","sour",
+    "source","south","southeast","southern","southwest","sovereign","sovereignty","sow","space","spacecraft",
+    "spacious","span","spare","spark","sparkle","spatial","speak","speaker","speaking","special",
+    "specialist","specialize","specialized","specially","specialty","species","specific","specifically","specification","specify",
+    "specimen","spectacle","spectacular","spectator","spectrum","speculate","speculation","speculative","speech","speed",
+    "speedy","spell","spelling","spend","spending","sphere","spherical","spice","spicy","spider",
+    "spill","spin","spine","spiral","spirit","spiritual","spit","spite","splash","splendid",
+    "split","spoil","spoke","spokesman","spokesperson","sponsor","sponsorship","spontaneous","spontaneously","spoon",
+    "sport","sporting","spot","spotlight","spouse","sprawl","spray","spread","spring","sprinkle",
+    "spur","spy","squad","squadron","square","squeeze","squrad","stability","stabilize","stable",
+    "stack","stadium","staff","stage","stagger","stain","stair","staircase","stake","stale",
+    "stalk","stall","stamp","stand","standard","standardize","standpoint","star","stare","start",
+    "starter","startle","starvation","starve","state","statement","statesman","static","station","stationary",
+    "statistic","statistical","statistically","statistician","statistics","statue","status","statute","statutory","stay",
+    "steadfast","steadily","steady","steak","steal","steam","steel","steep","steer","stem",
+    "step","stereo","stereotype","stern","stick","sticker","sticky","stiff","stiffen","stifle",
+    "stigma","still","stimulate","stimulation","stimulus","sting","stipulate","stir","stitch","stock",
+    "stockholder","stomach","stone","stool","stoop","stop","storage","store","storm","stormy",
+    "story","stout","straight","straightforward","strain","strand","strange","strangely","stranger","strap",
+    "strategic","strategically","strategy","straw","streak","stream","streamline","street","strength","strengthen",
+    "strenuous","stress","stressful","stretch","strict","strictly","stride","strike","striker","striking",
+    "string","stringent","strip","stripe","strive","stroke","stroll","strong","strongly","structural",
+    "structure","struggle","stubborn","student","studio","study","stuff","stumble","stun","stunning",
+    "sturdy","style","stylish","subdivide","subdivision","subdue","subject","subjective","submarine","submerge",
+    "submission","submit","subordinate","subordination","subscribe","subscriber","subscription","subsequent","subsequently","subside",
+    "subsidiary","subsidize","subsidy","subsistence","substance","substantial","substantially","substantiate","substitute","substitution",
+    "subtle","subtlety","subtly","subtract","subtraction","suburb","suburban","subway","succeed","success",
+    "successful","successfully","succession","successive","successor","succumb","such","suck","sudden","suddenly",
+    "sue","suffer","sufferer","suffering","suffice","sufficient","sufficiently","suffocate","sugar","suggest",
+    "suggestion","suggestive","suicide","suit","suitable","suitably","suitcase","suite","suitor","sulfur",
+    "sum","summarize","summary","summer","summit","summon","sun","sunlight","sunny","sunrise",
+    "sunset","sunshine","super","superb","superficial","superintendent","superior","superiority","supermarket","supernatural",
+    "supervise","supervision","supervisor","supplement","supplementary","supplier","supply","support","supporter","supportive",
+    "suppose","supposed","supposedly","suppress","suppression","supreme","sure","surely","surf","surface",
+    "surge","surgeon","surgery","surgical","surplus","surprise","surprised","surprising","surprisingly","surrender",
+    "surround","surrounding","surroundings","surveillance","survey","surveyor","survival","survive","survivor","susceptible",
+    "suspect","suspend","suspension","suspicion","suspicious","suspiciously","sustain","sustainable","sustained","swallow",
+    "swamp","swan","swap","swarm","swear","sweat","sweater","sweep","sweet","sweeten",
+    "sweetness","swell","swift","swiftly","swim","swimmer","swimming","swing","switch","sword",
+    "symbol","symbolic","symbolize","symmetry","sympathetic","sympathize","sympathy","symptom","syndrome","synonym",
+    "synonymous","syntax","synthesis","synthetic","system","systematic","systematically","table","tablespoon","tablet",
+    "tackle","tactic","tactical","tail","tailor","take","tale","talent","talented","talk",
+    "talkative","tall","tank","tap","tape","target","tariff","task","taste","tasteful",
+    "tasty","tax","taxation","taxpayer","tea","teach","teacher","teaching","team","teammate",
+    "tear","tease","technical","technically","technician","technique","technological","technology","tedious","teen",
+    "teenage","teenager","teeth","telecommunication","telegram","telegraph","telephone","telescope","television","tell",
+    "teller","temper","temperament","temperature","temple","tempo","temporarily","temporary","tempt","temptation",
+    "tenant","tend","tendency","tender","tenement","tennis","tenor","tense","tension","tent",
+    "tentative","tenure","term","terminal","terminate","termination","terminology","terrace","terrain","terrible",
+    "terribly","terrific","terrify","territorial","territory","terror","terrorism","terrorist","terrorize","test",
+    "testament","testify","testimony","testing","text","textbook","textile","texture","than","thank",
+    "thankful","thanks","theater","theft","theme","theology","theoretical","theoretically","theory","therapeutic",
+    "therapist","therapy","there","thereafter","thereby","therefore","therein","thereupon","thermal","thesis",
+    "thick","thicken","thickness","thief","thigh","thin","thing","think","thinker","thinking",
+    "third","thirst","thirsty","thirteen","thirty","thorough","thoroughly","though","thought","thoughtful",
+    "thoughtless","thousand","thread","threat","threaten","threatening","three","threshold","thrill","thrilled",
+    "thrilling","thrive","throat","throne","throng","through","throughout","throw","thrust","thumb",
+    "thunder","thunderstorm","ticket","tide","tidy","tier","tight","tighten","tightly","timber",
+    "time","timeless","timely","timetable","timid","tiny","tip","tire","tired","tireless",
+    "tissue","title","toast","tobacco","today","toe","together","toilet","token","tolerable",
+    "tolerance","tolerant","tolerate","toleration","toll","tomato","tomb","tomorrow","tone","tongue",
+    "tonight","too","tool","tooth","toothpaste","top","topic","torch","torrent","torture",
+    "toss","total","totally","touch","tough","toughness","tour","tourism","tourist","tournament",
+    "toward","towards","towel","tower","town","toxic","toxicity","toy","trace","track",
+    "trade","trader","trading","tradition","traditional","traditionally","traffic","tragedy","tragic","trail",
+    "trailer","train","trainer","training","trait","traitor","tram","tramp","transaction","transcend",
+    "transcript","transfer","transform","transformation","transformer","transfusion","transit","transition","transitional","translate",
+    "translation","translator","transmission","transmit","transmitter","transparency","transparent","transport","transportation","trap",
+    "trash","trauma","traumatic","travel","traveler","traverse","tray","treacherous","treachery","tread",
+    "treasure","treasurer","treasury","treat","treatment","treaty","tree","tremble","tremendous","tremendously",
+    "trench","trend","trendy","trial","triangle","triangular","tribal","tribe","tribute","trick",
+    "tricky","trigger","trillion","trim","trio","trip","triple","triumph","triumphant","troop",
+    "trophy","tropical","trouble","troubled","troublesome","trousers","truck","trucker","true","truly",
+    "trumpet","trunk","trust","trustee","trustworthy","truth","truthful","try","tsunami","tube",
+    "tuck","tuition","tumble","tumor","tune","tunnel","turbine","turbulence","turbulent","turf",
+    "turkey","turn","turnaround","turnover","tutor","tutorial","twelve","twenty","twice","twin",
+    "twist","two","type","typical","typically","typify","tyranny","tyrant","ugly","ultimate",
+    "ultimately","umbrella","unable","unacceptable","unaware","unbearable","uncertain","uncertainty","unchanged","uncle",
+    "uncomfortable","unconscious","unconstitutional","uncover","under","underestimate","undergo","undergraduate","underground","underlie",
+    "underline","underlying","undermine","underneath","understand","understanding","understandable","undertake","undertaking","underwear",
+    "undoubtedly","unemployed","unemployment","unexpected","unexpectedly","unfair","unfairly","unfamiliar","unfavorable","unfortunate",
+    "unfortunately","uniform","uniformity","uniformly","unify","union","unique","uniquely","unit","unite",
+    "united","unity","universal","universally","universe","university","unjust","unkind","unknown","unlawful",
+    "unless","unlike","unlikely","unlimited","unlock","unlucky","unnecessary","unprecedented","unpleasant","unprecedented",
+    "unreasonable","unresolved","unrest","unsafe","unsatisfactory","unstable","unsuccessful","unsuitable","unsure","untidy",
+    "until","untold","unusual","unusually","unwilling","unworthy","up","update","upgrade","uphold",
+    "upon","upper","upright","uprising","uproar","upset","upside","upstairs","upward","upwards",
+    "urban","urbanization","urge","urgency","urgent","urgently","urine","usage","use","used",
+    "useful","usefulness","useless","user","usher","usual","usually","utensil","utility","utilization",
+    "utilize","utmost","utter","utterly","vacant","vacation","vaccinate","vaccination","vaccine","vacuum",
+    "vague","vaguely","vain","valiant","valid","validate","validation","validity","valley","valuable",
+    "valuation","value","valve","van","vanguard","vanish","vanity","vapor","variable","variation",
+    "variety","various","variously","vary","varying","vast","vastly","vault","vegetable","vegetarian",
+    "vegetation","vehicle","veil","vein","velocity","vendor","venerable","vengeance","venture","venue",
+    "verdict","verge","verification","verify","versatile","versatility","verse","version","versus","vertical",
+    "vertically","very","vessel","veteran","veto","viable","vibrant","vibrate","vibration","vicar",
+    "vice","vicinity","vicious","victim","victor","victorious","victory","video","view","viewer",
+    "viewpoint","vigor","vigorous","vigorously","village","villager","villain","vine","violate","violation",
+    "violence","violent","violently","violet","violin","viral","virgin","virtual","virtually","virtue",
+    "virtuous","virus","visa","viscosity","visible","visibly","vision","visionary","visit","visitor",
+    "visual","visually","vital","vitality","vitamin","vivid","vividly","vocal","vocation","vocational",
+    "voice","void","volatile","volatility","volcanic","volcano","volume","voluntary","volunteer","vote",
+    "voter","voting","vow","voyage","vulgar","vulnerability","vulnerable","wage","wager","wagon",
+    "waist","wait","waiter","waitress","waiver","wake","walk","walker","walking","wall",
+    "wallet","walnut","wander","wanderer","want","war","ward","wardrobe","warehouse","warfare",
+    "warm","warmly","warmth","warn","warning","warrant","warranty","warrior","wary","wash",
+    "washer","washing","waste","wasteful","watch","watchdog","watchful","water","waterfall","waterproof",
+    "wave","wavelength","wax","way","weak","weaken","weakness","wealth","wealthy","weapon",
+    "wear","weary","weather","weave","weaver","wedding","wedge","weed","week","weekday",
+    "weekend","weekly","weep","weigh","weight","weighty","welcome","welfare","well","well-being",
+    "west","western","westward","wet","whale","what","whatever","wheat","wheel","wheelchair",
+    "when","whenever","where","whereas","whereby","wherever","whether","which","whichever","while",
+    "whim","whip","whisper","whistle","white","who","whoever","whole","wholesome","wholly",
+    "whom","whose","why","wicked","wide","widely","widen","widespread","widow","widower",
+    "width","wield","wife","wild","wilderness","wildlife","wildly","will","willing","willingly",
+    "willingness","win","wind","window","windy","wine","wing","winner","winning","winter",
+    "wipe","wire","wisdom","wise","wisely","wish","wit","with","withdraw","withdrawal",
+    "wither","withhold","within","without","withstand","witness","witty","wizard","wolf","woman",
+    "wonder","wonderful","wonderfully","wood","wooden","woodland","wool","woolen","word","wording",
+    "work","worker","workforce","working","workplace","workshop","world","worldwide","worm","worry",
+    "worse","worsen","worship","worst","worth","worthwhile","worthy","would","wound","wounded",
+    "wrap","wrapper","wrath","wreck","wreckage","wrench","wrestle","wrist","write","writer",
+    "writing","written","wrong","wrongly","xenophobia","yacht","yard","yawn","yeah","year",
+    "yearly","yearn","yell","yellow","yield","yoga","yogurt","young","youngster","youth",
+    "youthful","zeal","zealous","zero","zinc","zone"
   ];
 
-  let words = JSON.parse(localStorage.getItem("vocab_words")) || defaultWords;
+  // Başlangıç havuzu tamamen 0 kelime
+  let words = JSON.parse(localStorage.getItem("vocab_words")) || [];
   let currentWord = null;
+
+  function getEditDistance(a, b) {
+    if (a.length === 0) return b.length;
+    if (b.length === 0) return a.length;
+    const matrix = [];
+    for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+    for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+
+    for (let i = 1; i <= b.length; i++) {
+      for (let j = 1; j <= a.length; j++) {
+        if (b.charAt(i - 1) === a.charAt(j - 1)) {
+          matrix[i][j] = matrix[i - 1][j - 1];
+        } else {
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j - 1] + 1,
+            matrix[i][j - 1] + 1,
+            matrix[i - 1][j] + 1
+          );
+        }
+      }
+    }
+    return matrix[b.length][a.length];
+  }
+
+  function findClosestEnglishWord(input) {
+    input = input.toLowerCase().trim();
+    if (commonDictionary.includes(input)) return null;
+
+    let closest = null;
+    let minDistance = 999;
+
+    for (let dictWord of commonDictionary) {
+      let dist = getEditDistance(input, dictWord);
+      let allowedDist = input.length <= 3 ? 1 : 2;
+      if (dist <= allowedDist && dist < minDistance) {
+        minDistance = dist;
+        closest = dictWord;
+      }
+    }
+    return closest;
+  }
+
+  function detectPair(p1, p2) {
+    const trCharRegex = /[çğışöüÇĞİŞÖÜ]/;
+    if (trCharRegex.test(p1) && !trCharRegex.test(p2)) return { tr: p1, en: p2 };
+    if (trCharRegex.test(p2) && !trCharRegex.test(p1)) return { tr: p2, en: p1 };
+
+    const trVerbRegex = /(etmek|olmak|almak|vermek|yapmak|gitmek|gelmek|mak|mek)$/i;
+    if (trVerbRegex.test(p1) && !trVerbRegex.test(p2)) return { tr: p1, en: p2 };
+    if (trVerbRegex.test(p2) && !trVerbRegex.test(p1)) return { tr: p2, en: p1 };
+
+    if (p1.includes("/") && !p2.includes("/")) return { tr: p1, en: p2 };
+    if (p2.includes("/") && !p1.includes("/")) return { tr: p2, en: p1 };
+
+    return { tr: p2, en: p1 };
+  }
 
   function saveToStorage() {
     localStorage.setItem("vocab_words", JSON.stringify(words));
     updateStats();
-  }
-
-  // Türkçe / İngilizce ayrımını akıllıca yapan fonksiyon
-  function detectPair(p1, p2) {
-    // Türkçe özel karakterler: ç, ğ, ı, ö, ş, ü
-    const trCharRegex = /[çğışöüÇĞİŞÖÜ]/;
-    
-    // Eğer p1'de Türkçe karakter varsa kesinlikle p1 Türkçedir
-    if (trCharRegex.test(p1) && !trCharRegex.test(p2)) {
-      return { tr: p1, en: p2 };
-    }
-    // Eğer p2'de Türkçe karakter varsa kesinlikle p2 Türkçedir
-    if (trCharRegex.test(p2) && !trCharRegex.test(p1)) {
-      return { tr: p2, en: p1 };
-    }
-
-    // Türkçe mastar ekleri (etmek, olmak, almak, vermek, -mek, -mak)
-    const trVerbRegex = /(etmek|olmak|almak|vermek|yapmak|gitmek|gelmek|mak|mek)$/i;
-    if (trVerbRegex.test(p1) && !trVerbRegex.test(p2)) {
-      return { tr: p1, en: p2 };
-    }
-    if (trVerbRegex.test(p2) && !trVerbRegex.test(p1)) {
-      return { tr: p2, en: p1 };
-    }
-
-    // " / " veya birden fazla kelime Türkçe açıklamada daha sık olur
-    if (p1.includes("/") && !p2.includes("/")) return { tr: p1, en: p2 };
-    if (p2.includes("/") && !p1.includes("/")) return { tr: p2, en: p1 };
-
-    // Eğer iki tarafta da bariz bir Türkçe ipucu yoksa (örn: "cat = kedi" gibi düz kelimeler):
-    // Varsayılan kural: Eğer sol taraf saf İngilizce fonetiğine benziyorsa veya kullanıcı genelde en=tr giriyorsa
-    // Kullanıcı ilk kısma İngilizce yazsa bile:
-    return { tr: p2, en: p1 }; // Varsayılan: Sol İngilizce, Sağ Türkçe
+    renderWordList();
   }
 
   function pickRandomWord() {
     if (!words || words.length === 0) {
       document.getElementById("promptWord").textContent = "Havuzda kelime yok!";
+      document.getElementById("feedback").textContent = "";
       return;
     }
     
@@ -267,7 +925,6 @@
     }
   }
 
-  // Havuzu SİLMEYEN, üzerine ekleyen fonksiyon
   function addBulkWords() {
     const raw = document.getElementById("bulkInput").value.trim();
     if (!raw) return;
@@ -282,10 +939,16 @@
         let p2 = parts[1].trim().toLowerCase();
 
         if (p1 && p2) {
-          // Otomatik Türkçe - İngilizce tespiti
           let pair = detectPair(p1, p2);
 
-          // Havuzda zaten var mı kontrol et (aynısını tekrar eklemesin)
+          let suggestion = findClosestEnglishWord(pair.en);
+          if (suggestion) {
+            let acceptCorrection = confirm(`'${pair.en}' kelimesinde yazım hatası olabilir.\nBunu '${suggestion}' olarak düzeltelim mi?`);
+            if (acceptCorrection) {
+              pair.en = suggestion;
+            }
+          }
+
           let exists = words.find(w => w.tr === pair.tr || w.en === pair.en);
           if (exists) {
             exists.tr = pair.tr;
@@ -304,12 +967,33 @@
 
     saveToStorage();
     document.getElementById("bulkInput").value = "";
-    alert(`${addedCount} yeni kelime havuza eklendi! Toplam kelime: ${words.length}`);
+    alert(`${addedCount} kelime havuza eklendi! Toplam: ${words.length}`);
     pickRandomWord();
   }
 
+  function deleteWord(index) {
+    words.splice(index, 1);
+    saveToStorage();
+    pickRandomWord();
+  }
+
+  function renderWordList() {
+    const container = document.getElementById("wordListContainer");
+    if (!container) return;
+    if (!words || words.length === 0) {
+      container.innerHTML = "<div style='color: #64748b; font-size: 0.8rem; text-align: center;'>Havuz boş (Kelime ekleyin)</div>";
+      return;
+    }
+    container.innerHTML = words.map((w, i) => `
+      <div class="word-item">
+        <span><b>${w.tr}</b> = ${w.en}</span>
+        <button class="del-btn" onclick="deleteWord(${i})">Sil</button>
+      </div>
+    `).join("");
+  }
+
   function clearAllWords() {
-    if (confirm("Tüm kelime havuzunu temizlemek istediğinden emin misin?")) {
+    if (confirm("Tüm kelime havuzunu sıfırlamak istediğinden emin misin?")) {
       words = [];
       saveToStorage();
       pickRandomWord();
@@ -317,10 +1001,11 @@
   }
 
   function updateStats() {
-    document.getElementById("stats").textContent = "Toplam Kelime: " + (words ? words.length : 0);
+    document.getElementById("stats").textContent = "Havuz: " + (words ? words.length : 0) + " kelime";
   }
 
   updateStats();
+  renderWordList();
   pickRandomWord();
 </script>
 
