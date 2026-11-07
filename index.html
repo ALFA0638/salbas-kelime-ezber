@@ -36,9 +36,16 @@
       font-size: 1.6rem; 
       font-weight: bold; 
       text-align: center; 
-      margin: 25px 0 15px; 
+      margin: 20px 0 10px; 
       min-height: 40px; 
       color: #e2e8f0; 
+    }
+    .level-badge {
+      display: block;
+      text-align: center;
+      font-size: 0.8rem;
+      color: #94a3b8;
+      margin-bottom: 15px;
     }
     input[type="text"] { 
       width: 100%; 
@@ -164,6 +171,7 @@
   <h2>Kelime Pratiği</h2>
   
   <div class="word-box" id="promptWord">Havuzda kelime yok!</div>
+  <span class="level-badge" id="levelBadge"></span>
   
   <form id="quizForm" onsubmit="event.preventDefault(); checkAnswer();">
     <input type="text" id="answerInput" placeholder="İngilizce karşılığını yaz..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
@@ -188,7 +196,7 @@
 </div>
 
 <script>
-  // Genişletilmiş 2.000 Kelimelik Referans Sözlük (Yazım Hatası / Typo Denetimi İçin)
+  // 2.000 Kelimelik Referans Sözlük (Typo / Harf Hatası Kontrolü İçin)
   const commonDictionary = [
     "abandon","ability","able","abortion","about","above","abroad","absence","absolute","absolutely",
     "absorb","abstract","abuse","academic","accelerate","accent","accept","acceptable","access","accessible",
@@ -809,10 +817,20 @@
     "youthful","zeal","zealous","zero","zinc","zone"
   ];
 
-  // Başlangıç havuzu tamamen 0 kelime
   let words = JSON.parse(localStorage.getItem("vocab_words")) || [];
   let currentWord = null;
+  let totalSteps = parseInt(localStorage.getItem("vocab_steps")) || 0;
 
+  // Eski verileri yeni sistem yapısına uyarlama
+  words = words.map(w => ({
+    tr: w.tr,
+    en: w.en,
+    level: (w.level !== undefined) ? w.level : 0,
+    lastSeen: (w.lastSeen !== undefined) ? w.lastSeen : -999,
+    nextDue: (w.nextDue !== undefined) ? w.nextDue : 0
+  }));
+
+  // Levenshtein Mesafesi
   function getEditDistance(a, b) {
     if (a.length === 0) return b.length;
     if (b.length === 0) return a.length;
@@ -836,6 +854,7 @@
     return matrix[b.length][a.length];
   }
 
+  // En yakın İngilizce kelimeyi bulur
   function findClosestEnglishWord(input) {
     input = input.toLowerCase().trim();
     if (commonDictionary.includes(input)) return null;
@@ -871,6 +890,7 @@
 
   function saveToStorage() {
     localStorage.setItem("vocab_words", JSON.stringify(words));
+    localStorage.setItem("vocab_steps", totalSteps.toString());
     updateStats();
     renderWordList();
   }
@@ -878,28 +898,34 @@
   function pickRandomWord() {
     if (!words || words.length === 0) {
       document.getElementById("promptWord").textContent = "Havuzda kelime yok!";
+      document.getElementById("levelBadge").textContent = "";
       document.getElementById("feedback").textContent = "";
       return;
     }
-    
-    let totalWeight = words.reduce((sum, w) => sum + w.weight, 0);
-    let rand = Math.random() * totalWeight;
-    let selected = words[0];
 
-    for (let w of words) {
-      if (rand < w.weight) {
-        selected = w;
-        break;
-      }
-      rand -= w.weight;
+    totalSteps++;
+
+    let candidates = words.filter(w => w.nextDue <= totalSteps && (!currentWord || w.tr !== currentWord.tr));
+
+    if (candidates.length === 0) {
+      candidates = words.filter(w => !currentWord || w.tr !== currentWord.tr);
+      if (candidates.length === 0) candidates = words;
     }
 
-    if (words.length > 1 && currentWord && selected.tr === currentWord.tr) {
-      return pickRandomWord();
-    }
+    candidates.sort((a, b) => {
+      if (a.level !== b.level) return a.level - b.level;
+      return a.lastSeen - b.lastSeen;
+    });
+
+    let poolSize = Math.min(3, candidates.length);
+    let selected = candidates[Math.floor(Math.random() * poolSize)];
 
     currentWord = selected;
     document.getElementById("promptWord").textContent = currentWord.tr;
+    
+    const levelTexts = ["Yeni / Yanlış Yapıldı (Seviye 0)", "Öğreniliyor (Seviye 1)", "Pekiştiriliyor (Seviye 2)", "Ezberlendi (Seviye 3)"];
+    document.getElementById("levelBadge").textContent = levelTexts[Math.min(currentWord.level, 3)];
+    
     document.getElementById("answerInput").value = "";
     document.getElementById("feedback").textContent = "";
     document.getElementById("answerInput").focus();
@@ -911,16 +937,26 @@
     const correct = currentWord.en.toLowerCase();
     const feedback = document.getElementById("feedback");
 
+    currentWord.lastSeen = totalSteps;
+
     if (input === correct) {
       feedback.textContent = "Doğru!";
       feedback.className = "feedback correct";
-      currentWord.weight = Math.max(1, currentWord.weight - 1);
+
+      currentWord.level = Math.min(3, currentWord.level + 1);
+
+      let poolFactor = Math.max(2, Math.floor(words.length * 0.2));
+      let gap = (currentWord.level === 1) ? poolFactor : (currentWord.level === 2 ? poolFactor * 2 : poolFactor * 4);
+      
+      currentWord.nextDue = totalSteps + gap;
       saveToStorage();
       setTimeout(pickRandomWord, 700);
     } else {
       feedback.textContent = "Yanlış! Doğrusu: " + currentWord.en;
       feedback.className = "feedback wrong";
-      currentWord.weight += 3;
+
+      currentWord.level = 0;
+      currentWord.nextDue = totalSteps + 2;
       saveToStorage();
     }
   }
@@ -941,6 +977,7 @@
         if (p1 && p2) {
           let pair = detectPair(p1, p2);
 
+          // 2.000 kelimelik sözlükle yazım denetimi
           let suggestion = findClosestEnglishWord(pair.en);
           if (suggestion) {
             let acceptCorrection = confirm(`'${pair.en}' kelimesinde yazım hatası olabilir.\nBunu '${suggestion}' olarak düzeltelim mi?`);
@@ -957,7 +994,9 @@
             words.push({
               tr: pair.tr,
               en: pair.en,
-              weight: 3
+              level: 0,
+              lastSeen: -999,
+              nextDue: 0
             });
             addedCount++;
           }
@@ -986,7 +1025,7 @@
     }
     container.innerHTML = words.map((w, i) => `
       <div class="word-item">
-        <span><b>${w.tr}</b> = ${w.en}</span>
+        <span><b>${w.tr}</b> = ${w.en} <small style="color:#38bdf8;">(S${w.level})</small></span>
         <button class="del-btn" onclick="deleteWord(${i})">Sil</button>
       </div>
     `).join("");
@@ -995,6 +1034,7 @@
   function clearAllWords() {
     if (confirm("Tüm kelime havuzunu sıfırlamak istediğinden emin misin?")) {
       words = [];
+      totalSteps = 0;
       saveToStorage();
       pickRandomWord();
     }
