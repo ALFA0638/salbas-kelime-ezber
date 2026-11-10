@@ -2,8 +2,15 @@
 <html lang="tr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Kelime Ezber</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>YDS Kelime Ezber</title>
+  
+  <!-- iOS PWA Ayarları -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Kelime Ezber">
+  <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3898/3898082.png">
+
   <style>
     * { 
       box-sizing: border-box; 
@@ -33,12 +40,13 @@
       color: #38bdf8; 
     }
     .word-box { 
-      font-size: 1.6rem; 
+      font-size: 1.8rem; 
       font-weight: bold; 
       text-align: center; 
       margin: 20px 0 10px; 
       min-height: 40px; 
-      color: #e2e8f0; 
+      color: #38bdf8; 
+      letter-spacing: 0.5px;
     }
     .level-badge {
       display: block;
@@ -95,7 +103,7 @@
       margin-top: 15px; 
       text-align: center; 
       font-weight: bold; 
-      font-size: 1.1rem; 
+      font-size: 1.05rem; 
       min-height: 28px; 
     }
     .correct { 
@@ -168,25 +176,26 @@
 <body>
 
 <div class="card">
-  <h2>Kelime Pratiği</h2>
+  <h2>YDS Kelime Pratiği</h2>
   
   <div class="word-box" id="promptWord">Havuzda kelime yok!</div>
   <span class="level-badge" id="levelBadge"></span>
   
   <form id="quizForm" onsubmit="event.preventDefault(); checkAnswer();">
-    <input type="text" id="answerInput" placeholder="İngilizce karşılığını yaz..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+    <input type="text" id="answerInput" placeholder="Türkçe karşılığını yaz..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
     <button type="submit">Kontrol Et</button>
   </form>
 
   <div class="feedback" id="feedback"></div>
   <div class="stats" id="stats">Havuz: 0 kelime</div>
 
-  <details open>
+  <details>
     <summary>Kelime Ekle / Havuzu Yönet</summary>
     <p class="info-text">
-      Kelimeleri alt alta yapıştır. İster <b>Türkçe = İngilizce</b>, ister <b>İngilizce = Türkçe</b> yaz. Sistem harf hatalarını 2.000 kelimelik sözlükle otomatik denetler.
+      Kelimeleri alt alta yapıştır. İster <b>Türkçe = İngilizce</b>, ister <b>İngilizce = Türkçe</b> yaz.<br>
+      Birden fazla anlam varsa araya <b>/</b> veya <b>,</b> koyabilirsin.
     </p>
-    <textarea id="bulkInput" placeholder="car = araba&#10;borrow = ödünç almak&#10;bridge = köprü"></textarea>
+    <textarea id="bulkInput" placeholder="can = olabilmek / -ebilmek&#10;bridge = köprü&#10;occupy = işgal etmek, yer kaplamak"></textarea>
     <button type="button" class="btn-secondary" onclick="addBulkWords()">Havuza Ekle</button>
     
     <div class="word-list" id="wordListContainer"></div>
@@ -196,7 +205,7 @@
 </div>
 
 <script>
-  // 2.000 Kelimelik Referans Sözlük (Typo / Harf Hatası Kontrolü İçin)
+  // 2.000 Kelimelik Referans Sözlük
   const commonDictionary = [
     "abandon","ability","able","abortion","about","above","abroad","absence","absolute","absolutely",
     "absorb","abstract","abuse","academic","accelerate","accent","accept","acceptable","access","accessible",
@@ -821,16 +830,30 @@
   let currentWord = null;
   let totalSteps = parseInt(localStorage.getItem("vocab_steps")) || 0;
 
-  // Eski verileri yeni sistem yapısına uyarlama
-  words = words.map(w => ({
-    tr: w.tr,
-    en: w.en,
-    level: (w.level !== undefined) ? w.level : 0,
-    lastSeen: (w.lastSeen !== undefined) ? w.lastSeen : -999,
-    nextDue: (w.nextDue !== undefined) ? w.nextDue : 0
-  }));
+  // Kullanıcının talebi üzerine mevcut kelimelerin seviyelerini sıfırdan başlat
+  const RESET_KEY = "yds_levels_reset_v1";
+  if (!localStorage.getItem(RESET_KEY)) {
+    words = words.map(w => ({
+      tr: w.tr,
+      en: w.en,
+      level: 0,
+      lastSeen: -999,
+      nextDue: 0
+    }));
+    totalSteps = 0;
+    localStorage.setItem(RESET_KEY, "true");
+    localStorage.setItem("vocab_words", JSON.stringify(words));
+    localStorage.setItem("vocab_steps", "0");
+  } else {
+    words = words.map(w => ({
+      tr: w.tr,
+      en: w.en,
+      level: (w.level !== undefined) ? w.level : 0,
+      lastSeen: (w.lastSeen !== undefined) ? w.lastSeen : -999,
+      nextDue: (w.nextDue !== undefined) ? w.nextDue : 0
+    }));
+  }
 
-  // Levenshtein Mesafesi
   function getEditDistance(a, b) {
     if (a.length === 0) return b.length;
     if (b.length === 0) return a.length;
@@ -854,7 +877,6 @@
     return matrix[b.length][a.length];
   }
 
-  // En yakın İngilizce kelimeyi bulur
   function findClosestEnglishWord(input) {
     input = input.toLowerCase().trim();
     if (commonDictionary.includes(input)) return null;
@@ -895,6 +917,7 @@
     renderWordList();
   }
 
+  // YDS Modu: İngilizce Sorulur!
   function pickRandomWord() {
     if (!words || words.length === 0) {
       document.getElementById("promptWord").textContent = "Havuzda kelime yok!";
@@ -905,10 +928,10 @@
 
     totalSteps++;
 
-    let candidates = words.filter(w => w.nextDue <= totalSteps && (!currentWord || w.tr !== currentWord.tr));
+    let candidates = words.filter(w => w.nextDue <= totalSteps && (!currentWord || w.en !== currentWord.en));
 
     if (candidates.length === 0) {
-      candidates = words.filter(w => !currentWord || w.tr !== currentWord.tr);
+      candidates = words.filter(w => !currentWord || w.en !== currentWord.en);
       if (candidates.length === 0) candidates = words;
     }
 
@@ -921,7 +944,8 @@
     let selected = candidates[Math.floor(Math.random() * poolSize)];
 
     currentWord = selected;
-    document.getElementById("promptWord").textContent = currentWord.tr;
+    // İngilizce kelime sorulur
+    document.getElementById("promptWord").textContent = currentWord.en;
     
     const levelTexts = ["Yeni / Yanlış Yapıldı (Seviye 0)", "Öğreniliyor (Seviye 1)", "Pekiştiriliyor (Seviye 2)", "Ezberlendi (Seviye 3)"];
     document.getElementById("levelBadge").textContent = levelTexts[Math.min(currentWord.level, 3)];
@@ -931,16 +955,49 @@
     document.getElementById("answerInput").focus();
   }
 
+  // Türkçe karakter ve gereksiz ek/işaret temizleyici
+  function cleanTrString(str) {
+    return str
+      .toLowerCase()
+      .replace(/^[-–—\s]+|[-–—\s]+$/g, "") // Baştaki ve sondaki tireleri ve boşlukları atar (-ebilmek -> ebilmek)
+      .trim();
+  }
+
+  // Esnek Türkçe Doğruluk Kontrolü (Tek anlamı yazsa da doğru sayar)
+  function isTurkishAnswerCorrect(userInput, fullTargetTr) {
+    let cleanUser = cleanTrString(userInput);
+    if (!cleanUser) return false;
+
+    // Virgül, eğik çizgi veya noktalı virgülle ayrılmış alternatif anlamları diziye ayır
+    let validMeanings = fullTargetTr
+      .split(/[/,;]/)
+      .map(m => cleanTrString(m))
+      .filter(m => m.length > 0);
+
+    // 1. Doğrudan tam temiz eşleşme var mı?
+    if (validMeanings.includes(cleanUser)) return true;
+
+    // 2. Tireli hallerle eşleşme (-ebilmek ile ebilmek)
+    let altUser = cleanUser.startsWith("-") ? cleanUser.substring(1) : "-" + cleanUser;
+    if (validMeanings.includes(cleanTrString(altUser))) return true;
+
+    // 3. Kullanıcı virgülle veya boşlukla birden fazla anlam yazdıysa
+    for (let m of validMeanings) {
+      if (cleanUser === m) return true;
+    }
+
+    return false;
+  }
+
   function checkAnswer() {
     if (!currentWord) return;
-    const input = document.getElementById("answerInput").value.trim().toLowerCase();
-    const correct = currentWord.en.toLowerCase();
+    const userInput = document.getElementById("answerInput").value.trim();
     const feedback = document.getElementById("feedback");
 
     currentWord.lastSeen = totalSteps;
 
-    if (input === correct) {
-      feedback.textContent = "Doğru!";
+    if (isTurkishAnswerCorrect(userInput, currentWord.tr)) {
+      feedback.textContent = `Doğru! (${currentWord.tr})`;
       feedback.className = "feedback correct";
 
       currentWord.level = Math.min(3, currentWord.level + 1);
@@ -952,7 +1009,7 @@
       saveToStorage();
       setTimeout(pickRandomWord, 700);
     } else {
-      feedback.textContent = "Yanlış! Doğrusu: " + currentWord.en;
+      feedback.textContent = "Yanlış! Doğrusu: " + currentWord.tr;
       feedback.className = "feedback wrong";
 
       currentWord.level = 0;
@@ -977,7 +1034,7 @@
         if (p1 && p2) {
           let pair = detectPair(p1, p2);
 
-          // 2.000 kelimelik sözlükle yazım denetimi
+          // İngilizce tarafı için typo denetimi
           let suggestion = findClosestEnglishWord(pair.en);
           if (suggestion) {
             let acceptCorrection = confirm(`'${pair.en}' kelimesinde yazım hatası olabilir.\nBunu '${suggestion}' olarak düzeltelim mi?`);
@@ -986,7 +1043,7 @@
             }
           }
 
-          let exists = words.find(w => w.tr === pair.tr || w.en === pair.en);
+          let exists = words.find(w => w.en === pair.en);
           if (exists) {
             exists.tr = pair.tr;
             exists.en = pair.en;
@@ -1025,7 +1082,7 @@
     }
     container.innerHTML = words.map((w, i) => `
       <div class="word-item">
-        <span><b>${w.tr}</b> = ${w.en} <small style="color:#38bdf8;">(S${w.level})</small></span>
+        <span><b>${w.en}</b> = ${w.tr} <small style="color:#38bdf8;">(S${w.level})</small></span>
         <button class="del-btn" onclick="deleteWord(${i})">Sil</button>
       </div>
     `).join("");
