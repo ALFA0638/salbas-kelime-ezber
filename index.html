@@ -844,14 +844,12 @@
   let currentWord = null;
   let totalSteps = parseInt(localStorage.getItem("vocab_steps")) || 0;
 
-  // Geliştirilmiş otomatik onarım: Sağ tarafta saf İngilizce harfler varsa ve sol tarafta boşluk/Türkçe varsa yer değiştirir
   let repaired = false;
   words = words.map(w => {
     let enPart = w.en.toLowerCase().trim();
     let trPart = w.tr.toLowerCase().trim();
     const trCharRegex = /[çğışöüÇĞİŞÖÜ]/;
 
-    // Eğer 'en' kısmında Türkçe karakter varsa veya 'tr' kısmı sözlükte varsa yer değiştir
     if (trCharRegex.test(enPart) || (commonDictionary.includes(trPart) && !commonDictionary.includes(enPart))) {
       repaired = true;
       return {
@@ -901,7 +899,7 @@
 
   function findClosestEnglishWord(input) {
     input = input.toLowerCase().trim();
-    if (input.includes(" ")) return null; // Çok kelimeli ifadelerde typo uyarısı verme
+    if (input.includes(" ")) return null;
     if (commonDictionary.includes(input)) return null;
 
     let closest = null;
@@ -925,6 +923,7 @@
     renderWordList();
   }
 
+  // Tamamen Rastgele Seviye İçi Seçim: Sıra ezberlemeyi engeller!
   function pickRandomWord() {
     if (!words || words.length === 0) {
       document.getElementById("promptWord").textContent = "Havuzda kelime yok!";
@@ -935,6 +934,7 @@
 
     totalSteps++;
 
+    // 1. Bekleme süresi dolmuş ve az önce sorulmamış adayları bul
     let candidates = words.filter(w => w.nextDue <= totalSteps && (!currentWord || w.en !== currentWord.en));
 
     if (candidates.length === 0) {
@@ -942,13 +942,14 @@
       if (candidates.length === 0) candidates = words;
     }
 
-    candidates.sort((a, b) => {
-      if (a.level !== b.level) return a.level - b.level;
-      return a.lastSeen - b.lastSeen;
-    });
+    // 2. Adaylar içindeki en düşük seviyeyi (örneğin S0) bul
+    let minLevel = Math.min(...candidates.map(w => w.level));
 
-    let poolSize = Math.min(3, candidates.length);
-    let selected = candidates[Math.floor(Math.random() * poolSize)];
+    // 3. O seviyedeki TÜM aday kelimeleri al (ilk 3 kısıtlaması kaldırıldı)
+    let lowestLevelPool = candidates.filter(w => w.level === minLevel);
+
+    // 4. O seviyedeki tüm kelimeler arasından TAMAMEN RASTGELE birini seç
+    let selected = lowestLevelPool[Math.floor(Math.random() * lowestLevelPool.length)];
 
     currentWord = selected;
     document.getElementById("promptWord").textContent = currentWord.en;
@@ -1014,7 +1015,6 @@
     }
   }
 
-  // Kesin Kural: Sol taraf = İngilizce, Sağ taraf = Türkçe
   function addBulkWords() {
     const raw = document.getElementById("bulkInput").value.trim();
     if (!raw) return;
@@ -1061,7 +1061,6 @@
     pickRandomWord();
   }
 
-  // Tek tıkla İngilizce ve Türkçe yer değiştirme
   function swapWord(index) {
     let temp = words[index].en;
     words[index].en = words[index].tr;
